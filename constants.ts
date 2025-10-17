@@ -1,13 +1,15 @@
 
+
 import React from 'react';
 import { SparklesIcon } from './components/icons/SparklesIcon';
 import { CreateVideoIcon } from './components/icons/CreateVideoIcon';
 import { ZoomIcon } from './components/icons/ZoomIcon';
-import type { AppMode, AspectRatio, MagicAction, OutputQuality } from './types';
+import type { AppMode, AspectRatio, MagicAction, OutputQuality, AutoFilterStyle } from './types';
 import { GenerateFromImageIcon } from './components/icons/GenerateFromImageIcon';
 import { EditIcon } from './components/icons/EditIcon';
 import { SwapIcon } from './components/icons/SwapIcon';
 import { MagicWandIcon } from './components/icons/MagicWandIcon';
+import { PhotoRestoreIcon } from './components/icons/PhotoRestoreIcon';
 
 // FIX: Rewrote component using React.createElement to avoid JSX syntax in a .ts file.
 const VideoAnalysisIcon = () => (
@@ -30,9 +32,10 @@ const VideoAnalysisIcon = () => (
 
 export const MODES: { id: AppMode; name: string; icon: React.FC, formComponent?: React.FC<any> }[] = [
   { id: 'generate', name: 'Tạo ảnh', icon: SparklesIcon },
-  { id: 'image-generate', name: 'Tạo từ ảnh', icon: GenerateFromImageIcon },
-  { id: 'edit', name: 'Biến hoá', icon: EditIcon },
+  { id: 'image-generate', name: 'Thay trang phục', icon: GenerateFromImageIcon },
+  { id: 'edit', name: 'Ghép sản phẩm', icon: EditIcon },
   { id: 'magic', name: 'Magic Edit', icon: MagicWandIcon },
+  { id: 'photo-restore', name: 'Phục chế ảnh', icon: PhotoRestoreIcon },
   { id: 'analyze', name: 'Phân tích', icon: ZoomIcon },
   { id: 'video', name: 'Tạo video', icon: CreateVideoIcon },
   { id: 'video-analysis', name: 'Nhận diện Video', icon: VideoAnalysisIcon },
@@ -141,11 +144,31 @@ export const CONCEPTS: {id: string, name: string, thumbnail: string, prompt: str
 export const ASPECT_RATIOS: AspectRatio[] = ['1:1', '3:4', '4:3', '9:16', '16:9'];
 
 export const MAGIC_ACTIONS: {id: MagicAction, name: string}[] = [
+    { id: 'creative', name: 'Chỉnh sửa sáng tạo' },
+    { id: 'auto-filter', name: 'Filter màu tự động' },
     { id: 'upscale', name: 'Nâng cấp x2' },
     { id: 'remove-bg', name: 'Xóa nền' },
     { id: 'remove-object', name: 'Xóa vật thể' },
     { id: 'change-background', name: 'Đổi nền' },
     { id: 'fix-colors', name: 'Sửa màu tự động' },
+];
+
+export const AUTO_FILTER_STYLES: {id: AutoFilterStyle, name: string}[] = [
+    { id: 'cinematic-teal-orange', name: 'Điện ảnh (Teal & Orange)' },
+    { id: 'vintage', name: 'Vintage Film' },
+    { id: 'dramatic-bw', name: 'Trắng đen kịch tính' },
+    { id: 'vibrant-pop', name: 'Rực rỡ (Vibrant Pop)' },
+    { id: 'soft-dreamy', name: 'Mơ màng (Soft Dreamy)' },
+    { id: 'matte-moody', name: 'Xám Mờ Trầm (Matte)' },
+    { id: 'high-contrast-bw', name: 'Đen Trắng Gắt (High Contrast)' },
+    { id: 'cyberpunk-neon', name: 'Cyberpunk Neon (Đêm Rực)' },
+    { id: 'portra-film', name: 'Giả lập phim Portra (Da đẹp)' },
+    { id: 'creamy-skin', name: 'Chân dung - Da mịn (Creamy)' },
+    { id: 'golden-hour-pop', name: 'Chân dung - Chiều vàng (Golden)' },
+    { id: 'creamy-bw', name: 'Chân dung - Đen trắng mịn' },
+    { id: 'punchy-landscape', name: 'Phong cảnh - Rực rỡ (Punchy)' },
+    { id: 'cinematic-landscape', name: 'Phong cảnh - Điện ảnh' },
+    { id: 'moody-forest', name: 'Phong cảnh - Rừng trầm' },
 ];
 
 export const OUTPUT_QUALITIES: OutputQuality[] = [

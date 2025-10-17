@@ -9,19 +9,19 @@ interface ImageModalProps {
 export const ImageModal: React.FC<ImageModalProps> = ({ imageUrl, onClose }) => {
   return (
     <div 
-      className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 overflow-auto"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
     >
       <div 
-        className="relative max-w-full max-h-full"
+        className="relative"
         onClick={(e) => e.stopPropagation()} // Prevent closing modal when clicking on the image itself
       >
         <img 
           src={imageUrl} 
           alt="Zoomed result" 
-          className="block max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
+          className="block rounded-lg shadow-2xl"
         />
         <button
           onClick={onClose}

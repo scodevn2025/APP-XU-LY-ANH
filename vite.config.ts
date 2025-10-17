@@ -16,7 +16,9 @@ export default defineConfig(({ mode }) => {
       },
       resolve: {
         alias: {
-          '@': path.resolve(__dirname, '.'),
+          // FIX: Replaced `__dirname` which is not available in ES modules.
+          // `.` resolves to the project root where vite.config.js is located.
+          '@': path.resolve('.'),
         }
       }
     };

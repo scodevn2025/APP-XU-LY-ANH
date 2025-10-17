@@ -1,12 +1,7 @@
-
-
-
-
-
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-// Fix: Renamed ImageData to LocalImageData to avoid conflict with the built-in DOM type.
-import type { AppMode, GenerateOptions, EditOptions, SwapOptions, MagicOptions, AnalyzeOptions, AspectRatio, MagicAction, LocalImageData, OutputQuality, VideoOptions, ImageGenerateOptions, VideoAnalysisOptions } from '../types';
-import { ASPECT_RATIOS, MAGIC_ACTIONS, PROMPT_SUGGESTION_TAGS, EDIT_FORM_TAGS, OUTPUT_QUALITIES, MODES, CONCEPTS } from '../constants';
+// Fix: Renamed ImageData to LocalImageData
+import type { AppMode, GenerateOptions, EditOptions, SwapOptions, MagicOptions, AnalyzeOptions, AspectRatio, MagicAction, LocalImageData, OutputQuality, VideoOptions, ImageGenerateOptions, VideoAnalysisOptions, PhotoRestoreOptions, AutoFilterStyle } from '../types';
+import { ASPECT_RATIOS, MAGIC_ACTIONS, PROMPT_SUGGESTION_TAGS, EDIT_FORM_TAGS, OUTPUT_QUALITIES, MODES, CONCEPTS, AUTO_FILTER_STYLES } from '../constants';
 import { ImageUploader, MultiImageUploader, VideoUploader } from './ImageUploader';
 import { SpinnerIcon } from './icons/SpinnerIcon';
 import { SparklesIcon } from './icons/SparklesIcon';
@@ -140,8 +135,7 @@ const PromptHistoryDropdown: React.FC<{
 
 
 const PromptSuggestions: React.FC<{prompt: string, images?: LocalImageData[], onSelect: (suggestion: string) => void, initialSuggestions?: string[], mode: AppMode, apiKey: string}> = ({ prompt, images, onSelect, initialSuggestions, mode, apiKey }) => {
-    // FIX: Correctly typed `suggestions` state as `string[]` to prevent type errors.
-    // The previous `any` type was causing incorrect type inference.
+    // FIX: Explicitly typing the `suggestions` state as `string[]` to ensure type safety.
     const [suggestions, setSuggestions] = useState<string[]>(initialSuggestions || []);
     const [isSuggesting, setIsSuggesting] = useState(false);
     
@@ -159,13 +153,22 @@ const PromptSuggestions: React.FC<{prompt: string, images?: LocalImageData[], on
             return;
         }
         setIsSuggesting(true);
-        setSuggestions([]); 
+        setSuggestions([]);
         try {
             const result = await geminiService.generatePromptSuggestions(apiKey, { prompt, images, mode });
-            setSuggestions(result);
+            // FIX: Use a type predicate in the filter to ensure TypeScript correctly infers
+            // the resulting array type as string[], preventing potential type errors.
+            if (Array.isArray(result)) {
+                const stringSuggestions = result.filter((item): item is string => typeof item === 'string');
+                setSuggestions(stringSuggestions);
+            } else {
+                console.error("Expected suggestions to be an array of strings, but got:", result);
+                setSuggestions([]);
+            }
         } catch (error: any) {
             console.error(error);
             alert(`Không thể tạo gợi ý: ${error.message || 'Vui lòng thử lại.'}`);
+            setSuggestions([]); // Also clear on error
         } finally {
             setIsSuggesting(false);
         }
@@ -186,8 +189,7 @@ const PromptSuggestions: React.FC<{prompt: string, images?: LocalImageData[], on
             {suggestions.length > 0 && (
                 <div className="mt-4 space-y-2">
                     <p className="text-xs text-gray-400">Gợi ý từ AI (nhấn để sử dụng):</p>
-                    {/* Add Array.isArray check to ensure suggestions is an array before mapping. */}
-                    {Array.isArray(suggestions) && suggestions.map((s, i) => (
+                    {suggestions.map((s, i) => (
                         <div 
                             key={i} 
                             onClick={() => handleSuggestionClick(s)} 
@@ -220,11 +222,12 @@ const PromptAssistant: React.FC<{ onTagClick: (tag: string) => void, tags: Recor
     return (
         <div className="mt-2">
             <p className="text-xs text-gray-400 mb-1">Thêm chi tiết:</p>
-            {Object.entries(tags).map(([category, tagList]) => (
+            {/* FIX: Replaced Object.entries with Object.keys to avoid potential type inference issues with TypeScript, ensuring `tags[category]` is correctly typed as string[]. */}
+            {Object.keys(tags).map(category => (
                 <div key={category} className="mb-2">
                     <p className="text-xs font-semibold text-gray-300">{category}</p>
                     <div className="flex flex-wrap gap-1 mt-1">
-                        {tagList.map(tag => (
+                        {tags[category].map(tag => (
                             <button
                                 key={tag}
                                 type="button"
@@ -342,6 +345,28 @@ const GenerateForm: React.FC<Omit<ControlPanelProps, 'mode' | 'onZoomImage'>> = 
   const [prompt, setPrompt] = useState('');
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('9:16');
   const [numberOfImages, setNumberOfImages] = useState(4);
+  const [referenceImage, setReferenceImage] = useState<LocalImageData | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  useEffect(() => {
+    if (!referenceImage) {
+        return;
+    }
+    const analyze = async () => {
+        setIsAnalyzing(true);
+        setPrompt(''); // Clear previous prompt
+        try {
+            const description = await geminiService.analyzeImage(apiKey, { image: referenceImage });
+            setPrompt(description);
+        } catch (e: any) {
+            console.error("Image analysis failed:", e);
+            alert(`Không thể phân tích ảnh: ${e.message || 'Vui lòng thử lại.'}`);
+        } finally {
+            setIsAnalyzing(false);
+        }
+    };
+    analyze();
+  }, [referenceImage, apiKey]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -349,7 +374,12 @@ const GenerateForm: React.FC<Omit<ControlPanelProps, 'mode' | 'onZoomImage'>> = 
         alert("Vui lòng nhập mô tả.");
         return;
     }
-    const options: GenerateOptions = { prompt, aspectRatio, numberOfImages };
+    const options: GenerateOptions = { 
+        prompt, 
+        aspectRatio, 
+        numberOfImages,
+        image: referenceImage || undefined
+    };
     onSubmit(options);
   };
 
@@ -357,11 +387,17 @@ const GenerateForm: React.FC<Omit<ControlPanelProps, 'mode' | 'onZoomImage'>> = 
       setPrompt(p => p ? `${p}, ${tag}` : tag);
   }
   
-  const isDisabled = !apiKey || isLoading || cooldown > 0 || !prompt.trim();
-  const buttonTitle = !apiKey ? "Vui lòng nhập API Key để sử dụng tính năng này." : "";
+  const isDisabled = !apiKey || isLoading || cooldown > 0 || !prompt.trim() || isAnalyzing;
+  const buttonTitle = !apiKey ? "Vui lòng nhập API Key để sử dụng tính năng này." : isAnalyzing ? "Đang phân tích ảnh..." : "";
+  const buttonText = () => {
+      if (isLoading) return 'Đang tạo...';
+      if (cooldown > 0) return `Vui lòng đợi (${cooldown}s)`;
+      return referenceImage ? 'Tạo biến thể' : 'Tạo ảnh';
+  }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+        <ImageUploader label="Ảnh tham chiếu (tùy chọn)" image={referenceImage} onImageChange={setReferenceImage} />
       <div>
         <div className="flex justify-between items-center mb-2">
             <label htmlFor="prompt-generate" className="block text-sm font-medium text-gray-300">Mô tả (Prompt)</label>
@@ -373,10 +409,17 @@ const GenerateForm: React.FC<Omit<ControlPanelProps, 'mode' | 'onZoomImage'>> = 
           onChange={(e) => setPrompt(e.target.value)}
           rows={5}
           className="w-full bg-gray-900 border border-gray-600 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-white p-2"
-          placeholder="VD: một chú mèo phi hành gia đang lướt ván trong vũ trụ, phong cách nghệ thuật số"
+          placeholder={isAnalyzing ? "Đang phân tích ảnh để tạo prompt..." : "VD: một chú mèo phi hành gia đang lướt ván trong vũ trụ, phong cách nghệ thuật số"}
+          disabled={isAnalyzing}
         />
         <PromptAssistant onTagClick={handleTagClick} tags={PROMPT_SUGGESTION_TAGS} />
-        <PromptSuggestions apiKey={apiKey} prompt={prompt} onSelect={setPrompt} mode="generate" />
+        <PromptSuggestions 
+            apiKey={apiKey} 
+            prompt={prompt} 
+            images={referenceImage ? [referenceImage] : undefined}
+            onSelect={setPrompt} 
+            mode="generate" 
+        />
       </div>
       
       <div>
@@ -419,7 +462,7 @@ const GenerateForm: React.FC<Omit<ControlPanelProps, 'mode' | 'onZoomImage'>> = 
         className="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 focus:ring-offset-gray-900 disabled:bg-indigo-400 disabled:cursor-not-allowed mt-4 transition-transform duration-200 hover:scale-105 active:scale-95"
       >
         {isLoading && <SpinnerIcon />}
-        {isLoading ? 'Đang tạo...' : cooldown > 0 ? `Vui lòng đợi (${cooldown}s)` : 'Tạo ảnh'}
+        {buttonText()}
       </button>
     </form>
   );
@@ -437,23 +480,34 @@ const ImageGenerateForm: React.FC<Omit<ControlPanelProps, 'mode'>> = ({ onSubmit
   const [extractionError, setExtractionError] = useState<string | null>(null);
 
   const [extractedComponents, setExtractedComponents] = useState<{
+    character1_transparent: LocalImageData;
     outfit1: LocalImageData;
     outfit2: LocalImageData;
     outfit3_transparent: LocalImageData;
+    background1: LocalImageData;
     background2: LocalImageData;
   } | null>(null);
   
   // Component selection state
-  const [outfitSource, setOutfitSource] = useState<'image1' | 'image2_flat' | 'image2_transparent' | null>(null);
-  const [backgroundSource, setBackgroundSource] = useState<'image1' | 'image2' | null>(null);
+  const [backgroundSource, setBackgroundSource] = useState<'image1' | 'image2' | 'generated' | null>(null);
+  const [selectedOutfit, setSelectedOutfit] = useState<LocalImageData | null>(null);
+  const [outfitSource, setOutfitSource] = useState<'outfit1' | 'outfit2' | 'outfit3_transparent' | null>(null);
   
+  // Background generation state
+  const [generatedBackground, setGeneratedBackground] = useState<LocalImageData | null>(null);
+  const [backgroundPrompt, setBackgroundPrompt] = useState<string>('');
+  const [isGeneratingBackground, setIsGeneratingBackground] = useState<boolean>(false);
+
   // Clear extracted components if source images change
   useEffect(() => {
     setExtractedComponents(null);
-    setOutfitSource(null);
     setBackgroundSource(null);
     setExtractionError(null);
     setPrompt('');
+    setSelectedOutfit(null);
+    setOutfitSource(null);
+    setGeneratedBackground(null);
+    setBackgroundPrompt('');
   }, [image, conceptImage]);
 
   const handleExtract = async () => {
@@ -485,6 +539,21 @@ const ImageGenerateForm: React.FC<Omit<ControlPanelProps, 'mode'>> = ({ onSubmit
     }
   };
   
+  const handleGenerateBackground = async () => {
+    if (!apiKey || !backgroundPrompt.trim()) return;
+    setIsGeneratingBackground(true);
+    try {
+        const result = await geminiService.generateBackgroundImage(apiKey, backgroundPrompt, aspectRatio);
+        setGeneratedBackground(result);
+        setBackgroundSource('generated'); // Auto-select the newly generated background
+    } catch (e: any) {
+        console.error(e);
+        alert(`Không thể tạo bối cảnh: ${e.message}`);
+    } finally {
+        setIsGeneratingBackground(false);
+    }
+  };
+
   const handleDownload = (base64: string, mimeType: string, filename: string) => {
     const link = document.createElement('a');
     link.href = `data:${mimeType};base64,${base64}`;
@@ -494,35 +563,44 @@ const ImageGenerateForm: React.FC<Omit<ControlPanelProps, 'mode'>> = ({ onSubmit
     document.body.removeChild(link);
   };
 
+  const handleOutfitChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (!extractedComponents) return;
+      const value = e.target.value;
+      setOutfitSource(value as any);
+      switch (value) {
+          case 'outfit1': setSelectedOutfit(extractedComponents.outfit1); break;
+          case 'outfit2': setSelectedOutfit(extractedComponents.outfit2); break;
+          case 'outfit3_transparent': setSelectedOutfit(extractedComponents.outfit3_transparent); break;
+          default: setSelectedOutfit(null);
+      }
+  };
+
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!image || !conceptImage || !extractedComponents || !outfitSource || !backgroundSource) {
-        alert("Vui lòng tải ảnh, tách thành phần và chọn các yếu tố trước khi tạo ảnh.");
+    if (!image || !conceptImage || !extractedComponents || !backgroundSource || !selectedOutfit) {
+        alert("Vui lòng tải ảnh, tách thành phần, chọn bối cảnh và trang phục trước khi tạo ảnh.");
         return;
     }
     
-    let selectedOutfitImage: LocalImageData;
-    switch(outfitSource) {
-        case 'image1':
-            selectedOutfitImage = extractedComponents.outfit1;
-            break;
-        case 'image2_flat':
-            selectedOutfitImage = extractedComponents.outfit2;
-            break;
-        case 'image2_transparent':
-            selectedOutfitImage = extractedComponents.outfit3_transparent;
-            break;
-        default:
-            console.error("Invalid outfit source selected");
-            return;
+    let selectedBackgroundImage: LocalImageData | null = null;
+    if (backgroundSource === 'image1') {
+        selectedBackgroundImage = extractedComponents.background1;
+    } else if (backgroundSource === 'image2') {
+        selectedBackgroundImage = extractedComponents.background2;
+    } else if (backgroundSource === 'generated') {
+        selectedBackgroundImage = generatedBackground;
     }
-   
-    const selectedBackgroundImage = backgroundSource === 'image1' ? image : extractedComponents.background2;
+
+    if (!selectedBackgroundImage) {
+        alert("Vui lòng chọn hoặc tạo một bối cảnh hợp lệ.");
+        return;
+    }
 
     const options: ImageGenerateOptions = { 
         prompt, 
-        characterImage: image,
-        selectedOutfitImage,
+        characterImage: extractedComponents.character1_transparent,
+        selectedOutfitImage: selectedOutfit,
         selectedBackgroundImage,
         numberOfImages, 
         aspectRatio,
@@ -530,13 +608,14 @@ const ImageGenerateForm: React.FC<Omit<ControlPanelProps, 'mode'>> = ({ onSubmit
     onSubmit(options);
   };
   
-  const isSubmitDisabled = !apiKey || isLoading || cooldown > 0 || !image || !conceptImage || !extractedComponents || !outfitSource || !backgroundSource;
+  const isSubmitDisabled = !apiKey || isLoading || cooldown > 0 || !image || !extractedComponents || !backgroundSource || !selectedOutfit;
   
   const getButtonTitle = () => {
     if (!apiKey) return "Vui lòng nhập API Key.";
     if (!image || !conceptImage) return "Vui lòng tải lên cả hai ảnh.";
     if (!extractedComponents) return "Vui lòng tách thành phần trước.";
-    if (!outfitSource || !backgroundSource) return "Vui lòng chọn trang phục và bối cảnh.";
+    if (!backgroundSource) return "Vui lòng chọn bối cảnh.";
+    if (!selectedOutfit) return "Vui lòng chọn trang phục.";
     return "Tạo biến thể";
   };
   
@@ -599,10 +678,18 @@ const ImageGenerateForm: React.FC<Omit<ControlPanelProps, 'mode'>> = ({ onSubmit
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-center mt-4">
                 <figure 
                     className="relative group cursor-pointer overflow-hidden rounded-lg"
-                    onClick={() => onZoomImage(`data:${image.mimeType};base64,${image.base64}`)}
+                    onClick={() => onZoomImage(`data:${extractedComponents.character1_transparent.mimeType};base64,${extractedComponents.character1_transparent.base64}`)}
                 >
-                    <img src={`data:${image.mimeType};base64,${image.base64}`} className="w-full object-cover rounded-md mb-1 border-2 border-gray-600 transition-transform duration-300 group-hover:scale-105" alt="Nhân vật gốc"/>
-                    <figcaption className="text-xs text-gray-300">Nhân vật (Giữ lại)</figcaption>
+                    <img src={`data:${extractedComponents.character1_transparent.mimeType};base64,${extractedComponents.character1_transparent.base64}`} className="w-full h-full object-contain rounded-md mb-1 border-2 border-gray-600 transition-transform duration-300 group-hover:scale-105" alt="Nhân vật đã tách nền"/>
+                    <figcaption className="text-xs text-gray-300">Nhân vật (Đã tách)</figcaption>
+                     <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-2">
+                        <button type="button" onClick={(e) => { e.stopPropagation(); onZoomImage(`data:${extractedComponents.character1_transparent.mimeType};base64,${extractedComponents.character1_transparent.base64}`); }} className="p-2 bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-full text-white" title="Phóng to">
+                            <ZoomIcon />
+                        </button>
+                        <button type="button" onClick={(e) => { e.stopPropagation(); handleDownload(extractedComponents.character1_transparent.base64, extractedComponents.character1_transparent.mimeType, 'nhan-vat-tach-nen.png'); }} className="p-2 bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-full text-white" title="Tải xuống Nhân vật">
+                            <DownloadIcon />
+                        </button>
+                    </div>
                 </figure>
                 <figure 
                     className="relative group cursor-pointer overflow-hidden rounded-lg"
@@ -671,13 +758,13 @@ const ImageGenerateForm: React.FC<Omit<ControlPanelProps, 'mode'>> = ({ onSubmit
             <div className="space-y-4 mt-4 p-4 bg-gray-900/50 rounded-lg">
                 {/* Character Source (Locked) */}
                 <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Nhân vật (Giữ nguyên)</label>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Nhân vật</label>
                     <div className="flex gap-2 p-3 bg-gray-800 border-2 border-indigo-700 rounded-lg">
                          <img src={`data:${image.mimeType};base64,${image.base64}`} className="w-16 h-16 object-cover rounded-md" alt="Nhân vật gốc" />
                          <div className="flex flex-col justify-center">
                             <div className="flex items-center gap-2">
                                 <PersonIcon />
-                                <span className="text-sm font-medium text-gray-200">Từ Ảnh 1</span>
+                                <span className="text-sm font-medium text-gray-200">Từ Ảnh 1 (Luôn giữ)</span>
                             </div>
                             <p className="text-xs text-gray-400 mt-1">Khuôn mặt và vóc dáng của nhân vật này sẽ được giữ lại.</p>
                          </div>
@@ -686,21 +773,45 @@ const ImageGenerateForm: React.FC<Omit<ControlPanelProps, 'mode'>> = ({ onSubmit
 
                 {/* Outfit Source */}
                 <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Chọn Trang phục</label>
-                    <div className="flex flex-col sm:flex-row gap-4">
-                        <RadioCard value="image1" label="Từ Ảnh 1 (Flat Lay)" group="outfit" current={outfitSource} onChange={(e:any) => setOutfitSource(e.target.value)} icon={<ShirtIcon />} imageSrc={extractedComponents.outfit1.base64} imageMime={extractedComponents.outfit1.mimeType} />
-                        <RadioCard value="image2_flat" label="Từ Ảnh 2 (Flat Lay)" group="outfit" current={outfitSource} onChange={(e:any) => setOutfitSource(e.target.value)} icon={<ShirtIcon />} imageSrc={extractedComponents.outfit2.base64} imageMime={extractedComponents.outfit2.mimeType} />
-                        <RadioCard value="image2_transparent" label="Từ Ảnh 2 (Giữ Dáng)" group="outfit" current={outfitSource} onChange={(e:any) => setOutfitSource(e.target.value)} icon={<ShirtIcon />} imageSrc={extractedComponents.outfit3_transparent.base64} imageMime={extractedComponents.outfit3_transparent.mimeType} />
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Chọn Trang phục & Tư thế</label>
+                     <div className="flex flex-col sm:flex-row gap-4">
+                        <RadioCard value="outfit1" label="Trang phục Ảnh 1" group="outfit" current={outfitSource} onChange={handleOutfitChange} icon={<ShirtIcon />} imageSrc={extractedComponents.outfit1.base64} imageMime={extractedComponents.outfit1.mimeType} />
+                        <RadioCard value="outfit2" label="Trang phục Ảnh 2" group="outfit" current={outfitSource} onChange={handleOutfitChange} icon={<ShirtIcon />} imageSrc={extractedComponents.outfit2.base64} imageMime={extractedComponents.outfit2.mimeType} />
+                        <RadioCard value="outfit3_transparent" label="Ảnh 2 (Trong suốt)" group="outfit" current={outfitSource} onChange={handleOutfitChange} icon={<ShirtIcon />} imageSrc={extractedComponents.outfit3_transparent.base64} imageMime={extractedComponents.outfit3_transparent.mimeType} />
                     </div>
                 </div>
+
 
                 {/* Background Source */}
                 <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">Chọn Bối cảnh</label>
-                     <div className="flex gap-4">
-                        <RadioCard value="image1" label="Từ Ảnh 1 (Gốc)" group="background" current={backgroundSource} onChange={(e:any) => setBackgroundSource(e.target.value)} icon={<LandscapeIcon />} imageSrc={image.base64} imageMime={image.mimeType} />
+                     <div className="flex flex-col sm:flex-row gap-4">
+                        <RadioCard value="image1" label="Từ Ảnh 1 (Đã tách)" group="background" current={backgroundSource} onChange={(e:any) => setBackgroundSource(e.target.value)} icon={<LandscapeIcon />} imageSrc={extractedComponents.background1.base64} imageMime={extractedComponents.background1.mimeType} />
                         <RadioCard value="image2" label="Từ Ảnh 2 (Đã tách)" group="background" current={backgroundSource} onChange={(e:any) => setBackgroundSource(e.target.value)} icon={<LandscapeIcon />} imageSrc={extractedComponents.background2.base64} imageMime={extractedComponents.background2.mimeType} />
+                        <RadioCard value="generated" label={generatedBackground ? "Bối cảnh đã tạo" : "Tạo từ mô tả"} group="background" current={backgroundSource} onChange={(e:any) => setBackgroundSource(e.target.value)} icon={<SparklesIcon />} imageSrc={generatedBackground?.base64} imageMime={generatedBackground?.mimeType} />
                     </div>
+                    {backgroundSource === 'generated' && (
+                        <div className="mt-4 p-3 border border-gray-700 rounded-lg bg-gray-900/30 animate-fade-in-down">
+                            <label htmlFor="background-prompt" className="block text-sm font-medium text-gray-300 mb-2">Mô tả bối cảnh bạn muốn tạo</label>
+                            <textarea
+                                id="background-prompt"
+                                value={backgroundPrompt}
+                                onChange={(e) => setBackgroundPrompt(e.target.value)}
+                                rows={3}
+                                className="w-full bg-gray-900 border border-gray-600 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-white p-2"
+                                placeholder="VD: một bãi biển nhiệt đới lúc hoàng hôn, có những cây cọ"
+                            />
+                            <button
+                                type="button"
+                                onClick={handleGenerateBackground}
+                                disabled={!backgroundPrompt.trim() || isGeneratingBackground || !apiKey}
+                                className="mt-2 w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 disabled:bg-green-400 disabled:cursor-not-allowed"
+                            >
+                                {isGeneratingBackground ? <SpinnerIcon /> : <SparklesIcon />}
+                                <span className="ml-2">{isGeneratingBackground ? 'Đang tạo...' : 'Tạo bối cảnh'}</span>
+                            </button>
+                        </div>
+                    )}
                 </div>
             </div>
           </div>
@@ -882,27 +993,29 @@ const EditForm: React.FC<Omit<ControlPanelProps, 'mode' | 'onZoomImage'>> = ({ o
 };
 
 const MagicForm: React.FC<Omit<ControlPanelProps, 'mode' | 'onZoomImage'>> = ({ onSubmit, isLoading, cooldown, quality, onQualityChange, apiKey, initialMagicImage, onClearInitialMagicImage, promptHistory, onClearPromptHistory }) => {
-    const [action, setAction] = useState<MagicAction>('upscale');
-    // Fix: Renamed ImageData to LocalImageData
+    const [action, setAction] = useState<MagicAction>('creative');
     const [image, setImage] = useState<LocalImageData | null>(null);
     const [prompt, setPrompt] = useState('');
     const [mask, setMask] = useState<LocalImageData | null>(null);
+    const [numberOfImages, setNumberOfImages] = useState(2);
+    const [aspectRatio, setAspectRatio] = useState<AspectRatio>('9:16');
+    const [filterStyle, setFilterStyle] = useState<AutoFilterStyle>('cinematic-teal-orange');
 
     useEffect(() => {
         if (initialMagicImage && onClearInitialMagicImage) {
             setImage(initialMagicImage);
-            // Reset other fields for a clean start with the new image
             setPrompt('');
             setMask(null);
-            setAction('upscale'); // Default action
+            setAction('creative');
             onClearInitialMagicImage();
         }
     }, [initialMagicImage, onClearInitialMagicImage]);
 
-    // Reset mask when image or action changes
     useEffect(() => {
         setMask(null);
-        setPrompt('');
+        if (action !== 'creative' && action !== 'change-background' && action !== 'remove-object') {
+            setPrompt('');
+        }
     }, [image, action]);
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -911,31 +1024,56 @@ const MagicForm: React.FC<Omit<ControlPanelProps, 'mode' | 'onZoomImage'>> = ({ 
             alert("Vui lòng tải lên ảnh để chỉnh sửa.");
             return;
         }
-        if (action === 'change-background' && !prompt.trim()) {
-            alert("Vui lòng nhập mô tả cho nền mới.");
-            return;
-        }
-        if (action === 'remove-object' && !mask && !prompt.trim()) {
-            alert("Vui lòng tô chọn vật thể cần xóa hoặc mô tả nó bằng văn bản.");
-            return;
-        }
 
-        const isPromptNeededForAction = action === 'change-background' || action === 'remove-object';
+        let options: MagicOptions;
 
-        const options: MagicOptions = { 
-            action, 
-            image, 
-            prompt: isPromptNeededForAction ? prompt : undefined,
-            mask: action === 'remove-object' ? mask : undefined,
-        };
+        if (action === 'creative') {
+            if (!prompt.trim()) {
+                alert("Vui lòng nhập mô tả cho chỉnh sửa sáng tạo.");
+                return;
+            }
+            options = { action, image, prompt, numberOfImages, aspectRatio };
+        } else if (action === 'change-background') {
+            if (!prompt.trim()) {
+                alert("Vui lòng nhập mô tả cho nền mới.");
+                return;
+            }
+            options = { action, image, prompt };
+        } else if (action === 'remove-object') {
+             if (!mask && !prompt.trim()) {
+                alert("Vui lòng tô chọn vật thể cần xóa hoặc mô tả nó bằng văn bản.");
+                return;
+            }
+            options = { action, image, prompt: prompt || undefined, mask: mask || undefined };
+        } else if (action === 'auto-filter') {
+            options = { action, image, filterStyle };
+        }
+        else {
+            options = { action, image };
+        }
         onSubmit(options);
     };
 
-    const isDisabled = !apiKey || isLoading || cooldown > 0 || !image ||
-        (action === 'change-background' && !prompt.trim()) ||
-        (action === 'remove-object' && !mask && !prompt.trim());
+    const isPromptVisible = action === 'creative' || action === 'change-background' || action === 'remove-object';
+    const isCreativeOptionsVisible = action === 'creative';
+    const isMaskingVisible = action === 'remove-object';
+    const isAutoFilterVisible = action === 'auto-filter';
+
+    let isDisabled = !apiKey || isLoading || cooldown > 0 || !image;
+    if (action === 'creative' && !prompt.trim()) isDisabled = true;
+    if (action === 'change-background' && !prompt.trim()) isDisabled = true;
+    if (action === 'remove-object' && !mask && !prompt.trim()) isDisabled = true;
         
     const buttonTitle = !apiKey ? "Vui lòng nhập API Key để sử dụng tính năng này." : "";
+    
+    const getPromptPlaceholder = () => {
+        switch(action) {
+            case 'creative': return 'VD: biến thành một chiến binh cyberpunk, bối cảnh thành phố neon';
+            case 'change-background': return 'VD: một khu rừng huyền ảo';
+            case 'remove-object': return 'VD: xóa chiếc xe hơi màu đỏ ở phía sau';
+            default: return '';
+        }
+    }
 
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -952,46 +1090,83 @@ const MagicForm: React.FC<Omit<ControlPanelProps, 'mode' | 'onZoomImage'>> = ({ 
                 </div>
             </div>
 
-            {image && action === 'remove-object' && (
+            {isAutoFilterVisible && (
+                <div className="space-y-3 animate-fade-in-down">
+                    <label className="block text-sm font-medium text-gray-300">Chọn style filter</label>
+                    <div className="grid grid-cols-2 gap-2">
+                        {AUTO_FILTER_STYLES.map(style => (
+                            <button
+                                type="button"
+                                key={style.id}
+                                onClick={() => setFilterStyle(style.id)}
+                                className={`p-2 border rounded-md text-xs transition-colors h-full ${filterStyle === style.id ? 'bg-indigo-600 border-indigo-500' : 'bg-gray-700 border-gray-600 hover:bg-gray-600'}`}
+                            >
+                                {style.name}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {isMaskingVisible && image && (
                 <div className="space-y-3 animate-fade-in-down">
                     <MaskingEditor image={image} onMaskChange={setMask} />
+                </div>
+            )}
+            
+            {isPromptVisible && (
+                 <div className="animate-fade-in-down">
+                    <div className="flex justify-between items-center mb-2">
+                        <label htmlFor="prompt-magic" className="block text-sm font-medium text-gray-300">
+                            Mô tả yêu cầu
+                        </label>
+                        <PromptHistoryDropdown history={promptHistory} onSelect={setPrompt} onClear={onClearPromptHistory} />
+                    </div>
+                    <textarea
+                      id="prompt-magic"
+                      value={prompt}
+                      onChange={(e) => setPrompt(e.target.value)}
+                      rows={3}
+                      className="w-full bg-gray-900 border border-gray-600 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-white p-2"
+                      placeholder={getPromptPlaceholder()}
+                    />
+                  </div>
+            )}
+            
+            {isCreativeOptionsVisible && (
+                <div className="space-y-4 animate-fade-in-down">
                     <div>
-                        <div className="flex justify-between items-center mb-2">
-                          <label htmlFor="prompt-magic-remove" className="block text-sm font-medium text-gray-300">
-                              Hoặc mô tả vật thể cần xóa
-                          </label>
-                          <PromptHistoryDropdown history={promptHistory} onSelect={setPrompt} onClear={onClearPromptHistory} />
+                        <label className="block text-sm font-medium text-gray-300 mb-2">Tỷ lệ khung hình</label>
+                        <div className="flex flex-wrap gap-2">
+                        {ASPECT_RATIOS.map((ratio) => (
+                            <button
+                            type="button"
+                            key={ratio}
+                            onClick={() => setAspectRatio(ratio)}
+                            className={`flex-1 p-2 border rounded-md text-xs transition-colors ${
+                                aspectRatio === ratio ? 'bg-indigo-600 border-indigo-500' : 'bg-gray-700 border-gray-600 hover:bg-gray-600'
+                            }`}
+                            >
+                            {ratio}
+                            </button>
+                        ))}
                         </div>
-                        <textarea
-                          id="prompt-magic-remove"
-                          value={prompt}
-                          onChange={(e) => setPrompt(e.target.value)}
-                          rows={2}
-                          className="w-full bg-gray-900 border border-gray-600 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-white p-2"
-                          placeholder={'VD: xóa chiếc xe hơi màu đỏ ở phía sau'}
+                    </div>
+                    <div>
+                        <label htmlFor="numberOfImages-magic" className="block text-sm font-medium text-gray-300 mb-2">Số lượng ảnh: {numberOfImages}</label>
+                        <input
+                            type="range"
+                            id="numberOfImages-magic"
+                            min="1"
+                            max="4"
+                            value={numberOfImages}
+                            onChange={e => setNumberOfImages(Number(e.target.value))}
+                            className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
                         />
                     </div>
                 </div>
             )}
 
-            {action === 'change-background' && (
-                 <div className="animate-fade-in-down">
-                    <div className="flex justify-between items-center mb-2">
-                        <label htmlFor="prompt-magic-bg" className="block text-sm font-medium text-gray-300">
-                            Mô tả nền mới
-                        </label>
-                        <PromptHistoryDropdown history={promptHistory} onSelect={setPrompt} onClear={onClearPromptHistory} />
-                    </div>
-                    <textarea
-                      id="prompt-magic-bg"
-                      value={prompt}
-                      onChange={(e) => setPrompt(e.target.value)}
-                      rows={2}
-                      className="w-full bg-gray-900 border border-gray-600 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-white p-2"
-                      placeholder={'VD: một khu rừng huyền ảo'}
-                    />
-                  </div>
-            )}
 
             <QualitySelector quality={quality} onQualityChange={onQualityChange} />
 
@@ -1087,6 +1262,153 @@ const VideoAnalysisForm: React.FC<Omit<ControlPanelProps, 'mode' | 'quality' | '
     );
 };
 
+const PhotoRestoreForm: React.FC<Omit<ControlPanelProps, 'mode' | 'onZoomImage' | 'quality' | 'onQualityChange'>> = ({ onSubmit, isLoading, cooldown, apiKey, promptHistory, onClearPromptHistory }) => {
+    const [image, setImage] = useState<LocalImageData | null>(null);
+    const [exclusionPrompt, setExclusionPrompt] = useState('Tuyệt đối không tự động thay nền');
+    const [template, setTemplate] = useState('Phục chế chất lượng cao');
+    const [gender, setGender] = useState<'Nam' | 'Nữ' | null>('Nam');
+    const [age, setAge] = useState('25');
+    const [enhancements, setEnhancements] = useState<string[]>([
+        'Vẽ lại tóc chi tiết',
+        'Người Châu Á (Tóc đen)',
+        'Vẽ lại trang phục',
+        'Làm rõ nét hậu cảnh',
+        'Bám theo chi tiết khuôn mặt ảnh gốc',
+    ]);
+    
+    const TEMPLATES = [
+        'Phục chế chất lượng cao',
+        'Phục chế & Tô màu',
+        'Tái tạo ảnh hỏng nặng',
+        'Khử ố vàng & Phai màu',
+        'Phục chế chân dung nâng cao',
+        'Phục hồi bức tranh và vẽ lại thật chi tiết'
+    ];
+    
+    const ENHANCEMENT_OPTIONS = [
+        'Vẽ lại tóc chi tiết',
+        'Người Châu Á (Tóc đen)',
+        'Vẽ lại trang phục',
+        'Làm rõ nét hậu cảnh',
+        'Bám theo chi tiết khuôn mặt ảnh gốc',
+        'Chữ kí'
+    ];
+
+    const handleEnhancementChange = (option: string) => {
+        setEnhancements(prev => 
+            prev.includes(option) ? prev.filter(item => item !== option) : [...prev, option]
+        );
+    };
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!image) {
+            alert("Vui lòng tải lên ảnh để phục chế.");
+            return;
+        }
+        const options: PhotoRestoreOptions = {
+            image,
+            exclusionPrompt,
+            template,
+            gender,
+            age,
+            enhancements,
+        };
+        onSubmit(options);
+    };
+
+    const isDisabled = !apiKey || isLoading || cooldown > 0 || !image;
+    const buttonTitle = !apiKey ? "Vui lòng nhập API Key để sử dụng tính năng này." : !image ? "Vui lòng tải lên một ảnh." : "";
+
+    return (
+        <form onSubmit={handleSubmit} className="space-y-4">
+            <ImageUploader label="Tải ảnh gốc cần phục chế" image={image} onImageChange={setImage} />
+            
+            <div>
+                <label htmlFor="exclusion-prompt" className="block text-sm font-medium text-gray-300">Yêu cầu loại trừ (tùy chọn)</label>
+                <input
+                    id="exclusion-prompt"
+                    type="text"
+                    value={exclusionPrompt}
+                    onChange={e => setExclusionPrompt(e.target.value)}
+                    className="mt-1 w-full bg-gray-900 border border-gray-600 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-white p-2"
+                    placeholder="VD: không thay đổi trang phục"
+                />
+            </div>
+            
+            <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Hoặc chọn một mẫu có sẵn</label>
+                <div className="grid grid-cols-2 gap-2">
+                    {TEMPLATES.map(t => (
+                        <button
+                            type="button"
+                            key={t}
+                            onClick={() => setTemplate(t)}
+                            className={`p-2 border rounded-md text-xs transition-colors h-full ${template === t ? 'bg-indigo-600 border-indigo-500' : 'bg-gray-700 border-gray-600 hover:bg-gray-600'}`}
+                        >
+                            {t}
+                        </button>
+                    ))}
+                </div>
+            </div>
+            
+            <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Giới tính & Độ tuổi (tùy chọn)</label>
+                <div className="flex gap-2">
+                    <button
+                        type="button"
+                        onClick={() => setGender('Nam')}
+                        className={`flex-1 p-2 border rounded-md text-sm transition-colors ${gender === 'Nam' ? 'bg-indigo-600 border-indigo-500' : 'bg-gray-700 border-gray-600 hover:bg-gray-600'}`}
+                    >
+                        Nam
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setGender('Nữ')}
+                        className={`flex-1 p-2 border rounded-md text-sm transition-colors ${gender === 'Nữ' ? 'bg-indigo-600 border-indigo-500' : 'bg-gray-700 border-gray-600 hover:bg-gray-600'}`}
+                    >
+                        Nữ
+                    </button>
+                    <input
+                        type="number"
+                        value={age}
+                        onChange={e => setAge(e.target.value)}
+                        className="w-20 bg-gray-900 border border-gray-600 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-white p-2 text-center"
+                        placeholder="Tuổi"
+                    />
+                </div>
+            </div>
+            
+            <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Tùy chọn thêm</label>
+                <div className="space-y-2">
+                    {ENHANCEMENT_OPTIONS.map(opt => (
+                        <label key={opt} className="flex items-center gap-2 cursor-pointer text-sm text-gray-300">
+                            <input
+                                type="checkbox"
+                                checked={enhancements.includes(opt)}
+                                onChange={() => handleEnhancementChange(opt)}
+                                className="h-4 w-4 rounded border-gray-500 bg-gray-700 text-indigo-600 focus:ring-indigo-500"
+                            />
+                            {opt}
+                        </label>
+                    ))}
+                </div>
+            </div>
+
+            <button
+                type="submit"
+                disabled={isDisabled}
+                title={buttonTitle}
+                className="w-full flex items-center justify-center px-4 py-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 focus:ring-offset-gray-900 disabled:bg-indigo-400 disabled:cursor-not-allowed mt-4 transition-transform duration-200 hover:scale-105 active:scale-95"
+            >
+                {isLoading && <SpinnerIcon />}
+                {isLoading ? 'Đang phục chế...' : cooldown > 0 ? `Vui lòng đợi (${cooldown}s)` : 'Phục Chế Ảnh'}
+            </button>
+        </form>
+    );
+};
+
 
 export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
     const { mode } = props;
@@ -1102,6 +1424,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
             case 'image-generate': return ImageGenerateForm;
             case 'edit': return EditForm;
             case 'magic': return MagicForm;
+            case 'photo-restore': return PhotoRestoreForm;
             case 'analyze': return AnalyzeForm;
             case 'video': return VideoForm;
             case 'video-analysis': return VideoAnalysisForm;

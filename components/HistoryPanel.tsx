@@ -1,9 +1,11 @@
 
+
 import React, { useState, useMemo } from 'react';
 import type { HistoryItem } from '../types';
 import { DownloadIcon } from './icons/DownloadIcon';
 import { TrashIcon } from './icons/TrashIcon';
 import { HistoryIcon } from './icons/HistoryIcon';
+import { ZoomIcon } from './icons/ZoomIcon';
 
 type FilterType = 'all' | 'image' | 'video' | 'text';
 
@@ -14,7 +16,7 @@ const FileTextIcon = () => (
 );
 
 
-const HistoryItemCard: React.FC<{ item: HistoryItem; onDelete: (id: string) => void }> = ({ item, onDelete }) => {
+const HistoryItemCard: React.FC<{ item: HistoryItem; onDelete: (id: string) => void; onZoomImage: (url: string) => void; }> = ({ item, onDelete, onZoomImage }) => {
     
     const handleDownload = async () => {
         if (item.type === 'text') {
@@ -100,7 +102,10 @@ const HistoryItemCard: React.FC<{ item: HistoryItem; onDelete: (id: string) => v
     }
 
     return (
-        <div className="relative group bg-gray-800 rounded-lg overflow-hidden shadow-lg aspect-square flex items-center justify-center transition-all duration-300 hover:shadow-indigo-500/20 hover:scale-105 animate-fade-scale-in">
+        <div 
+          className="relative group bg-gray-800 rounded-lg overflow-hidden shadow-lg aspect-square flex items-center justify-center transition-all duration-300 hover:shadow-indigo-500/20 hover:scale-105 animate-fade-scale-in"
+          onClick={item.type === 'image' ? () => onZoomImage(item.data) : undefined}
+        >
             {item.type === 'image' ? (
                 <img src={item.data} alt={item.prompt} className="w-full h-full object-cover" />
             ) : (
@@ -108,8 +113,18 @@ const HistoryItemCard: React.FC<{ item: HistoryItem; onDelete: (id: string) => v
             )}
             <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-300 flex flex-col justify-between p-3 text-white">
                 <div className="flex justify-end gap-2">
+                     {item.type === 'image' && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onZoomImage(item.data); }}
+                            className="p-2 bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-full transition-colors"
+                            aria-label="Zoom"
+                            title="Phóng to"
+                        >
+                            <ZoomIcon />
+                        </button>
+                    )}
                      <button
-                        onClick={handleDownload}
+                        onClick={(e) => { e.stopPropagation(); handleDownload(); }}
                         className="p-2 bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-full transition-colors"
                         aria-label="Download"
                         title="Tải xuống"
@@ -117,7 +132,7 @@ const HistoryItemCard: React.FC<{ item: HistoryItem; onDelete: (id: string) => v
                         <DownloadIcon />
                     </button>
                     <button
-                        onClick={() => onDelete(item.id)}
+                        onClick={(e) => { e.stopPropagation(); onDelete(item.id); }}
                         className="p-2 bg-red-600/50 hover:bg-red-500 backdrop-blur-sm rounded-full transition-colors"
                         aria-label="Delete"
                         title="Xóa"
@@ -140,9 +155,10 @@ interface HistoryPanelProps {
   history: HistoryItem[];
   onDeleteItem: (id: string) => void;
   onClearHistory: () => void;
+  onZoomImage: (url: string) => void;
 }
 
-export const HistoryPanel: React.FC<HistoryPanelProps> = ({ history, onDeleteItem, onClearHistory }) => {
+export const HistoryPanel: React.FC<HistoryPanelProps> = ({ history, onDeleteItem, onClearHistory, onZoomImage }) => {
     const [filter, setFilter] = useState<FilterType>('all');
 
     const filteredHistory = useMemo(() => {
@@ -195,7 +211,7 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({ history, onDeleteIte
             {filteredHistory.length > 0 ? (
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                     {filteredHistory.map(item => (
-                        <HistoryItemCard key={item.id} item={item} onDelete={onDeleteItem} />
+                        <HistoryItemCard key={item.id} item={item} onDelete={onDeleteItem} onZoomImage={onZoomImage} />
                     ))}
                 </div>
             ) : (

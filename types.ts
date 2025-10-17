@@ -1,9 +1,10 @@
-
 import React from 'react';
 
-export type AppMode = 'generate' | 'image-generate' | 'edit' | 'magic' | 'analyze' | 'video' | 'video-analysis';
+export type AppMode = 'generate' | 'image-generate' | 'edit' | 'magic' | 'analyze' | 'video' | 'video-analysis' | 'photo-restore';
 export type AspectRatio = '1:1' | '3:4' | '4:3' | '9:16' | '16:9';
-export type MagicAction = 'upscale' | 'remove-bg' | 'remove-object' | 'change-background' | 'fix-colors';
+export type MagicAction = 'creative' | 'upscale' | 'remove-bg' | 'remove-object' | 'change-background' | 'fix-colors' | 'auto-filter';
+export type AutoFilterStyle = 'vintage' | 'cinematic-teal-orange' | 'dramatic-bw' | 'vibrant-pop' | 'soft-dreamy' | 'matte-moody' | 'high-contrast-bw' | 'cyberpunk-neon' | 'portra-film' | 'creamy-skin' | 'golden-hour-pop' | 'creamy-bw' | 'punchy-landscape' | 'cinematic-landscape' | 'moody-forest';
+
 
 // Fix: Renamed ImageData to LocalImageData to avoid conflict with the built-in DOM type.
 export interface LocalImageData {
@@ -30,6 +31,7 @@ export interface GenerateOptions {
     prompt: string;
     aspectRatio: AspectRatio;
     numberOfImages: number;
+    image?: LocalImageData;
 }
 
 export interface ImageGenerateOptions {
@@ -41,6 +43,12 @@ export interface ImageGenerateOptions {
     selectedBackgroundImage: LocalImageData;
 }
 
+// FIX: Add missing ConceptOptions interface.
+export interface ConceptOptions {
+  characterImage: LocalImageData;
+  conceptPrompt: string;
+  numberOfImages: number;
+}
 
 export interface EditOptions {
     prompt: string;
@@ -63,10 +71,22 @@ export interface MagicOptions {
     image: LocalImageData;
     prompt?: string;
     mask?: LocalImageData;
+    numberOfImages?: number;
+    aspectRatio?: AspectRatio;
+    filterStyle?: AutoFilterStyle;
 }
 
 export interface AnalyzeOptions {
     image: LocalImageData;
+}
+
+export interface PhotoRestoreOptions {
+    image: LocalImageData;
+    exclusionPrompt: string;
+    template: string;
+    gender: 'Nam' | 'Nữ' | null;
+    age: string;
+    enhancements: string[];
 }
 
 export interface VideoOptions {

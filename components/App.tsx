@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { ControlPanel } from './ControlPanel';
 import { ResultsDisplay } from './ResultsDisplay';
@@ -7,7 +5,7 @@ import { Toast } from './Toast';
 import * as geminiService from '../services/geminiService';
 import * as cloudinaryService from '../services/cloudinaryService';
 // Fix: Renamed ImageData to LocalImageData to avoid conflict with the built-in DOM type.
-import type { AppMode, OutputQuality, LocalImageData, GenerateOptions, EditOptions, SwapOptions, MagicOptions, AnalyzeOptions, VideoOptions, HistoryItem, ImageGenerateOptions, AspectRatio, VideoAnalysisOptions } from '../types';
+import type { AppMode, OutputQuality, LocalImageData, GenerateOptions, EditOptions, SwapOptions, MagicOptions, AnalyzeOptions, VideoOptions, HistoryItem, ImageGenerateOptions, AspectRatio, VideoAnalysisOptions, PhotoRestoreOptions } from '../types';
 import { MODES, CONCEPTS } from '../constants';
 import { ApiKeyModal } from './ApiKeyModal';
 import { KeyIcon } from './icons/KeyIcon';
@@ -134,6 +132,7 @@ const App: React.FC = () => {
 
   const handleEditImage = (base64: string, mimeType: string) => {
     setMode('magic');
+    setQuality('hd'); // Default to HD for magic edit
     setInitialMagicImage({ base64, mimeType });
     setResults([]); // Clear previous results
     setView('studio'); // Switch to studio view
@@ -159,7 +158,21 @@ const App: React.FC = () => {
 
       switch (mode) {
         case 'generate':
-          response = await geminiService.generateImages(apiKey, options as GenerateOptions);
+          const genOptions = options as GenerateOptions;
+          if (genOptions.image) {
+              // This is an image variation task
+              const magicOptions: MagicOptions = {
+                  action: 'creative',
+                  image: genOptions.image,
+                  prompt: genOptions.prompt,
+                  numberOfImages: genOptions.numberOfImages,
+                  aspectRatio: genOptions.aspectRatio,
+              };
+              response = await geminiService.magicEdit(apiKey, magicOptions);
+          } else {
+              // Standard text-to-image
+              response = await geminiService.generateImages(apiKey, genOptions);
+          }
           promptToSave = options.prompt;
           startCooldown(10);
           break;
@@ -177,6 +190,11 @@ const App: React.FC = () => {
             response = await geminiService.magicEdit(apiKey, options as MagicOptions);
             promptToSave = options.prompt;
             startCooldown(10);
+            break;
+        case 'photo-restore':
+            response = await geminiService.restorePhoto(apiKey, options as PhotoRestoreOptions);
+            promptToSave = options.template;
+            startCooldown(15);
             break;
         case 'analyze':
             response = await geminiService.analyzeImage(apiKey, { image: options.image as LocalImageData });
@@ -333,7 +351,13 @@ const App: React.FC = () => {
               return (
                 <button 
                   key={m.id}
-                  onClick={() => { setMode(m.id); setResults([]); }}
+                  onClick={() => { 
+                    setMode(m.id); 
+                    setResults([]); 
+                    if (m.id === 'magic') {
+                      setQuality('hd');
+                    }
+                  }}
                   className={`flex items-center justify-start gap-3 flex-shrink-0 md:w-full p-3 rounded-lg text-sm font-medium transition-colors ${mode === m.id ? 'bg-gray-700/80 text-white' : 'text-gray-400 hover:bg-gray-700/50 hover:text-white'}`}
                   aria-pressed={mode === m.id}
                 >
@@ -391,6 +415,7 @@ const App: React.FC = () => {
                         aspectRatio={lastUsedAspectRatio}
                         onCreateVideo={handleCreateVideoFromImage}
                         onEditImage={handleEditImage}
+                        onZoomImage={setZoomedImageUrl}
                       />
                     </section>
                 </div>
@@ -399,6 +424,7 @@ const App: React.FC = () => {
                   history={history}
                   onDeleteItem={handleDeleteHistoryItem}
                   onClearHistory={handleClearHistory}
+                  onZoomImage={setZoomedImageUrl}
                 />
               )}
             </div>

@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { SpinnerIcon } from './icons/SpinnerIcon';
 import { DownloadIcon } from './icons/DownloadIcon';
@@ -16,6 +17,7 @@ interface ResultsDisplayProps {
   aspectRatio: AspectRatio;
   onCreateVideo: (base64: string, mimeType: string) => void;
   onEditImage: (base64: string, mimeType: string) => void;
+  onZoomImage: (url: string) => void;
 }
 
 const WelcomeState: React.FC<{mode: AppMode}> = ({mode}) => {
@@ -26,6 +28,7 @@ const WelcomeState: React.FC<{mode: AppMode}> = ({mode}) => {
       case 'edit': return 'Sẵn sàng biến hoá nhân vật của bạn';
       // FIX: Removed 'swap' case as it is not a valid AppMode.
       case 'magic': return 'Bộ công cụ chỉnh sửa ảnh AI';
+      case 'photo-restore': return 'Phục Chế Ảnh Cũ Nát by AI';
       case 'analyze': return 'Phân tích hình ảnh bằng AI';
       case 'video': return 'Tạo video chuyển động từ ý tưởng';
       case 'video-analysis': return 'Phân tích và nhận diện video';
@@ -80,6 +83,18 @@ const WelcomeState: React.FC<{mode: AppMode}> = ({mode}) => {
             <br />
             <span className="text-xs text-gray-400 mt-2 block bg-gray-900/50 p-2 rounded-md">
               VD xóa vật thể: "xóa chiếc xe hơi màu đỏ ở phía sau".
+            </span>
+          </>
+        );
+       case 'photo-restore':
+        return (
+          <>
+            Biến những bức ảnh cũ mờ, nát thành ảnh 4K - 8K sắc nét với AI.
+            <br />
+            Tải lên bức ảnh của bạn và chọn các tùy chọn để phục chế, tô màu, và làm rõ nét các chi tiết.
+            <br />
+            <span className="text-xs text-gray-400 mt-2 block bg-gray-900/50 p-2 rounded-md">
+              Mẹo: Kết hợp các mẫu có sẵn và tùy chọn thêm để đạt được kết quả tốt nhất.
             </span>
           </>
         );
@@ -240,6 +255,15 @@ const VideoAnalysisResult: React.FC<VideoAnalysisResultProps> = ({ result, onEdi
     const { analysis, frames } = result;
     const [activeTab, setActiveTab] = useState('summary');
 
+    if (!analysis) {
+        return (
+            <div className="p-4 text-center text-red-400">
+                <h3 className="text-lg font-semibold">Phân tích thất bại</h3>
+                <p>AI không thể phân tích video này. Điều này có thể do video không có âm thanh hoặc nội dung không được hỗ trợ.</p>
+            </div>
+        );
+    }
+
     const handleDownloadSrt = () => {
         if (!analysis.srt_subtitles) return;
         const blob = new Blob([analysis.srt_subtitles], { type: 'text/srt' });
@@ -357,8 +381,7 @@ const getAspectRatioClass = (ratio: AspectRatio): string => {
 };
 
 
-export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ isLoading, results, mode, aspectRatio, onCreateVideo, onEditImage }) => {
-  const [zoomedImage, setZoomedImage] = useState<string | null>(null);
+export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ isLoading, results, mode, aspectRatio, onCreateVideo, onEditImage, onZoomImage }) => {
 
   const handleDownload = (base64Image: string, index: number) => {
     const link = document.createElement('a');
@@ -368,29 +391,12 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ isLoading, resul
     link.click();
     document.body.removeChild(link);
   };
-  
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      setZoomedImage(null);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (zoomedImage) {
-      window.addEventListener('keydown', handleKeyDown);
-    } else {
-      window.removeEventListener('keydown', handleKeyDown);
-    }
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [zoomedImage, handleKeyDown]);
 
   const hasResults = results.length > 0;
   // Responsive grid: 1 column on small screens, 2 on medium screens and up.
   const gridCols = results.length > 1 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1';
   const itemSpan = results.length === 1 ? 'max-w-md mx-auto' : '';
-  const showImageActions = mode === 'generate' || mode === 'edit' || mode === 'image-generate' || mode === 'magic';
+  const showImageActions = mode === 'generate' || mode === 'edit' || mode === 'image-generate' || mode === 'magic' || mode === 'photo-restore';
   
   const aspectRatioClass = getAspectRatioClass(aspectRatio);
 
@@ -409,7 +415,7 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ isLoading, resul
              return (
                 <div className={`grid ${gridCols} gap-4 w-full`}>
                     {results.map((base64, index) => (
-                    <div key={index} className={`relative group overflow-hidden rounded-lg shadow-lg ${itemSpan} ${aspectRatioClass} cursor-pointer transition-shadow duration-300 hover:shadow-indigo-500/20 animate-fade-scale-in`} style={{'--animation-delay': `${index * 100}ms`} as React.CSSProperties} onClick={() => setZoomedImage(base64)}>
+                    <div key={index} className={`relative group overflow-hidden rounded-lg shadow-lg ${itemSpan} ${aspectRatioClass} cursor-pointer transition-shadow duration-300 hover:shadow-indigo-500/20 animate-fade-scale-in`} style={{'--animation-delay': `${index * 100}ms`} as React.CSSProperties} onClick={() => onZoomImage(`data:image/jpeg;base64,${base64}`)}>
                         <img
                         src={`data:image/jpeg;base64,${base64}`}
                         alt={`Generated result ${index + 1}`}
@@ -417,7 +423,7 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ isLoading, resul
                         />
                         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-4">
                         <button
-                            onClick={(e) => { e.stopPropagation(); setZoomedImage(base64); }}
+                            onClick={(e) => { e.stopPropagation(); onZoomImage(`data:image/jpeg;base64,${base64}`); }}
                             className="p-3 bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-full text-white transition-colors"
                             aria-label="Zoom image"
                         >
@@ -463,12 +469,6 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ isLoading, resul
       <div className="bg-gray-800 rounded-lg p-4 sm:p-6 min-h-[60vh] flex items-center justify-center border-2 border-dashed border-gray-700">
         {renderContent()}
       </div>
-      {zoomedImage && (
-        <ImageModal 
-          imageUrl={`data:image/jpeg;base64,${zoomedImage}`}
-          onClose={() => setZoomedImage(null)}
-        />
-      )}
     </>
   );
 };
