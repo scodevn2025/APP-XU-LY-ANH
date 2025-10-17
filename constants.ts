@@ -10,6 +10,8 @@ import { EditIcon } from './components/icons/EditIcon';
 import { SwapIcon } from './components/icons/SwapIcon';
 import { MagicWandIcon } from './components/icons/MagicWandIcon';
 import { PhotoRestoreIcon } from './components/icons/PhotoRestoreIcon';
+import { ProductIcon } from './components/icons/ProductIcon';
+import { TravelIcon } from './components/icons/TravelIcon';
 
 // FIX: Rewrote component using React.createElement to avoid JSX syntax in a .ts file.
 const VideoAnalysisIcon = () => (
@@ -33,6 +35,8 @@ const VideoAnalysisIcon = () => (
 export const MODES: { id: AppMode; name: string; icon: React.FC, formComponent?: React.FC<any> }[] = [
   { id: 'generate', name: 'Tạo ảnh', icon: SparklesIcon },
   { id: 'image-generate', name: 'Thay trang phục', icon: GenerateFromImageIcon },
+  { id: 'ai-travel', name: 'Du lịch AI', icon: TravelIcon },
+  { id: 'product-shot', name: 'Chụp ảnh sản phẩm', icon: ProductIcon },
   { id: 'edit', name: 'Ghép sản phẩm', icon: EditIcon },
   { id: 'magic', name: 'Magic Edit', icon: MagicWandIcon },
   { id: 'photo-restore', name: 'Phục chế ảnh', icon: PhotoRestoreIcon },
@@ -41,103 +45,205 @@ export const MODES: { id: AppMode; name: string; icon: React.FC, formComponent?:
   { id: 'video-analysis', name: 'Nhận diện Video', icon: VideoAnalysisIcon },
 ];
 
-export const CONCEPTS: {id: string, name: string, thumbnail: string, prompt: string}[] = [
+export const AI_TRAVEL_CONCEPTS: {id: string, name: string, prompt: string}[] = [
     {
-        id: 'vietnam_tet',
-        name: 'Tết Việt Nam',
-        thumbnail: 'https://storage.googleapis.com/gemini-ui-params/images/concept_tet.jpeg',
-        prompt: 'A beautiful young Vietnamese woman in a traditional red Ao Dai, smiling happily during Tet holiday. The background is a vibrant street scene in Hanoi\'s Old Quarter, adorned with festive red lanterns and peach blossoms. Cinematic photography, golden hour lighting.'
+        id: 'natural_light_window',
+        name: 'Cửa sổ + rèm mỏng',
+        prompt: 'Ultra-realistic portrait by a window with sheer curtains, soft backlight glow, linen camisole, gentle smile, mid-shot to close-up, natural skin texture, 50mm f/2.2 bokeh, no text, no watermark.'
     },
     {
-        id: 'mid_autumn',
-        name: 'Tết Trung Thu',
-        thumbnail: 'https://storage.googleapis.com/gemini-ui-params/images/concept_mid_autumn.jpeg',
-        prompt: 'A graceful Vietnamese woman in a lovely dress, holding a star-shaped lantern during the Mid-Autumn Festival. She is standing on a street decorated with colorful lanterns at night, with a joyful and magical atmosphere. A full moon is visible in the sky. Photorealistic, bokeh.'
+        id: 'minimal_bed_corner',
+        name: 'Góc giường tối giản',
+        prompt: 'Minimal cozy bed corner, white tones, lazy morning vibe, side window light, natural expression, 35mm f/2.8, high-key softness, no text.'
     },
     {
-        id: 'garden_muse',
-        name: 'Nàng thơ & Vườn hoa',
-        thumbnail: 'https://storage.googleapis.com/gemini-ui-params/images/concept_garden_muse.jpeg',
-        prompt: 'A dreamy Vietnamese muse in a flowing white dress, standing in the middle of a beautiful, blooming flower garden. The scene is bathed in soft, diffused morning sunlight, creating a gentle and romantic mood. Ethereal, soft focus, pastel colors.'
+        id: 'wood_table_tea',
+        name: 'Bàn gỗ + cốc trà',
+        prompt: 'Wood table, ceramic mug steam, soft daylight 45°, calm half-smile, intimate mid-shot with hand details, 50mm f/2, warm neutral palette, no text.'
     },
     {
-        id: 'coffee_muse',
-        name: 'Nàng thơ Cà phê',
-        thumbnail: 'https://storage.googleapis.com/gemini-ui-params/images/concept_coffee_muse.jpeg',
-        prompt: 'A chic, modern Vietnamese woman sitting at a stylish coffee shop in Saigon. She is looking thoughtfully out the window, with a cup of coffee on the table. The lighting is warm and inviting, with soft shadows. Urban lifestyle photography, shallow depth of field.'
+        id: 'full_length_mirror',
+        name: 'Gương toàn thân',
+        prompt: 'Full-length mirror portrait, clean room, diffused daylight, playful half-covered face, 35mm vertical, natural grain, no text.'
     },
     {
-        id: 'dalat_muse',
-        name: 'Nàng thơ Đà Lạt',
-        thumbnail: 'https://storage.googleapis.com/gemini-ui-params/images/concept_dalat_muse.jpeg',
-        prompt: 'A young woman with a vintage, romantic style, wearing a woolen sweater and a beret in a dreamy Da Lat pine forest. The air is slightly misty, and the late afternoon sun filters through the trees, creating a nostalgic and peaceful mood. Film photography look, warm tones.'
+        id: 'cafe_corridor',
+        name: 'Hành lang cafe nâu',
+        prompt: 'Cafe corridor, warm brown palette, bokeh string lights, soft smile, 50mm f/1.8 creamy background, lifestyle portrait, no text.'
     },
     {
-        id: 'hoian_muse',
-        name: 'Nàng thơ Hội An',
-        thumbnail: 'https://storage.googleapis.com/gemini-ui-params/images/concept_hoian_muse.jpeg',
-        prompt: 'An elegant woman wearing a traditional Ao Dai, posing gracefully in a narrow alley of Hoi An\'s ancient town. The background features iconic yellow walls and colorful silk lanterns. The lighting is from the golden hour, casting a warm, magical glow. Cinematic, travel photography.'
+        id: 'rooftop_golden_hour',
+        name: 'Rooftop giờ vàng',
+        prompt: 'Rooftop at golden hour, wind in white shirt, cinematic backlight rim, 35mm wide mid-shot, warm glow, no text.'
     },
     {
-        id: 'graduation_day',
-        name: 'Lễ Tốt nghiệp',
-        thumbnail: 'https://storage.googleapis.com/gemini-ui-params/images/concept_graduation.jpeg',
-        prompt: 'A proud and happy Vietnamese graduate woman in a university graduation gown and cap, holding a diploma. She is standing in a beautiful university campus with friends celebrating in the background. Bright, sunny day lighting, celebratory mood.'
+        id: 'street_motion',
+        name: 'Đường phố chuyển động',
+        prompt: 'Street style motion, panning shot, subtle motion blur, 85mm telephoto compression, confident stride, natural city background, no text.'
     },
     {
-        id: 'office_chic',
-        name: 'Công sở Thanh lịch',
-        thumbnail: 'https://storage.googleapis.com/gemini-ui-params/images/concept_office.jpeg',
-        prompt: 'A professional and confident businesswoman in a stylish, modern office outfit (blazer and trousers). She is standing in a sleek, contemporary office interior with large windows and a city view. Clean, professional lighting, corporate headshot style.'
+        id: 'studio_profile',
+        name: 'Studio tường trơn',
+        prompt: 'Clean studio headshot, blazer, neutral gray seamless, soft two-point lighting with hair light, 85mm f/4, confident calm expression, no text.'
     },
     {
-        id: 'beach_vacation',
-        name: 'Kỳ nghỉ Biển',
-        thumbnail: 'https://storage.googleapis.com/gemini-ui-params/images/concept_beach.jpeg',
-        prompt: 'A relaxed and happy woman in a beautiful summer maxi dress and a wide-brimmed hat, walking on a pristine tropical beach in Phu Quoc. The background shows turquoise water and white sand. The lighting is the beautiful golden hour just before sunset.'
+        id: 'high_key_beauty',
+        name: 'High-key beauty close-up',
+        prompt: 'High-key beauty close-up, luminous skin, soft reflector fill, 100mm macro portrait, delicate collarbone touch, no text.'
     },
     {
-        id: 'christmas',
-        name: 'Giáng Sinh',
-        thumbnail: 'https://storage.googleapis.com/gemini-ui-params/images/concept_christmas.jpeg',
-        prompt: 'A joyful woman wearing a cozy christmas sweater and a santa hat, sitting next to a beautifully decorated christmas tree with warm lights, smiling.'
+        id: 'low_key_shadow',
+        name: 'Low-key shadow',
+        prompt: 'Low-key portrait, single hard side light, dramatic chiaroscuro, 50mm, deep shadows, sculpted cheekbones, no text.'
     },
     {
-        id: 'ancient_library',
-        name: 'Thư viện Cổ',
-        thumbnail: 'https://storage.googleapis.com/gemini-ui-params/images/concept_library.jpeg',
-        prompt: 'An intellectual young woman sitting at a large wooden table in a grand, ancient library, surrounded by towering bookshelves. She is deeply focused on reading a classic book. The lighting is dramatic, with shafts of light coming from high windows, creating a quiet and studious atmosphere. Dark academia aesthetic.'
+        id: 'soft_romantic_muse',
+        name: 'Nàng thơ (soft romantic)',
+        prompt: 'Romantic soft portrait, chiffon dress, pastel bouquet, gentle backlight with slight haze, dreamy bloom lens effect, 50mm, no text.'
     },
     {
-        id: 'natural',
-        name: 'Tự nhiên',
-        thumbnail: 'https://storage.googleapis.com/gemini-ui-params/images/concept_natural.jpeg',
-        prompt: 'A female model in her 20s, wearing a linen pastel dress, in a park with many trees and trails. The scene is illuminated by window light penetrating through the foliage, creating a golden leaves bokeh effect. She is walking lightly with a natural, candid smile. The mood is fresh and candid with earth tones. A full-body shot using the rule of thirds with shallow depth of field, fine film grain, realistic skin, and cinematic color balance.'
+        id: 'vintage_film',
+        name: 'Vintage film',
+        prompt: 'Vintage-inspired portrait, mid-century vibe, 35mm, subtle film grain and muted tones, candid look over shoulder, no text.'
     },
     {
-        id: 'picnic',
-        name: 'Picnic Lifestyle',
-        thumbnail: 'https://storage.googleapis.com/gemini-ui-params/images/concept_picnic.jpeg',
-        prompt: 'A female model in a picnic setup on the grass: a bright gingham blanket, wicker basket, grapes, apples, and a glass cup. She is sitting sideways, reading a book under high-key natural light. The background features a blurred hill and lake. A wide environmental composition with warm whites, pastel accents, realistic textiles, and a gentle breeze in her hair. The aesthetic is that of a lifestyle magazine.'
+        id: 'hanfu_style',
+        name: 'Cổ trang/hanfu',
+        prompt: 'Traditional hanfu style portrait in garden, delicate hand gesture, serene gaze, soft daylight, 85mm shallow depth, no text.'
     },
     {
-        id: 'romantic_pastel',
-        name: 'Lãng mạn Pastel',
-        thumbnail: 'https://storage.googleapis.com/gemini-ui-params/images/concept_romantic.jpeg',
-        prompt: 'A romantic pastel portrait of a female model in a flowing chiffon dress, holding a bouquet of baby\'s breath. The scene is backlit by the golden hour, creating a soft rim light on her hair. An airy voile scarf is in motion. The mood is dreamy with a soft glow, slight haze, and creamy highlights. A centered composition with negative space.'
+        id: 'beach_and_wind',
+        name: 'Biển & gió',
+        prompt: 'Beach portrait at sunset, white slip dress, wind-swept, clean horizon, 35mm wide, gentle smile over shoulder, no text.'
     },
     {
-        id: 'street_style',
-        name: 'Street Style',
-        thumbnail: 'https://storage.googleapis.com/gemini-ui-params/images/concept_street.jpeg',
-        prompt: 'An editorial street style photo of a woman in a crop top and denim, captured mid-walk across a crosswalk on a city street. The lighting is hard-edged from the late afternoon sun, creating urban textures on the concrete. She has a confident attitude. The image has a teal and orange cinematic grade, with a shallow depth of field, leading lines, and reflections on her sunglasses.'
+        id: 'meadow_park',
+        name: 'Đồng cỏ/công viên',
+        prompt: 'Meadow portrait, floral dress, golden hour, 85mm tele compression, twirl motion, serene greenery bokeh, no text.'
     },
     {
-        id: 'vintage',
-        name: 'Vintage Hoàng hôn',
-        thumbnail: 'https://storage.googleapis.com/gemini-ui-params/images/concept_vintage_2.jpeg',
-        prompt: 'A vintage sunset portrait of a woman in a collared midi dress on an old balcony with ironwork. The lighting is golden hour, with a subtle mix of tungsten light. The image has a Kodak Portra-like film look with soft contrast and warm shadows. She is looking through a window, creating a reflection. The image features fine grain and gentle halation. Props include a vintage film camera.'
+        id: 'train_station',
+        name: 'Ga tàu/giao thông',
+        prompt: 'Transit hub portrait, clean architecture lines, purposeful stride, 35mm, subtle motion, lifestyle travel vibe, no text.'
+    },
+    {
+        id: 'cinematic_selfie',
+        name: 'Selfie cinematic',
+        prompt: 'Cinematic ‘selfie-angle’ portrait, close crop, slant window light, playful squint, shallow depth, 28–35mm feel, no text.'
+    },
+    {
+        id: 'in_the_kitchen',
+        name: 'Trong bếp',
+        prompt: 'Home kitchen lifestyle portrait, linen apron, cutting fresh fruit, soft top light with side fill, 50mm, warm homely vibe, no text.'
+    },
+    {
+        id: 'balcony_greenery',
+        name: 'Balcony greenery',
+        prompt: 'Balcony morning portrait, lush plants, coffee cup, fresh soft daylight, 50mm with foreground leaves bokeh, no text.'
+    },
+    {
+        id: 'ao_dai_non_la',
+        name: 'Áo dài + nón lá',
+        prompt: 'Ao dai traditional portrait with conical hat, Vietnamese heritage backdrop, soft daylight, 85mm elegance, timeless, no text.'
+    },
+    {
+        id: 'minimal_birthday',
+        name: 'Sinh nhật tối giản',
+        prompt: 'Minimal birthday portrait, single cake with candles, warm candlelit glow, 50mm, intimate moment eyes closed, no text.'
+    },
+    {
+        id: 'mini_lookbook',
+        name: 'Lookbook mini',
+        prompt: 'Mini lookbook sequence: three outfits, same background, step–stop–twirl, consistent daylight, 35–50mm clean fashion framing, no text.'
+    },
+    {
+        id: 'warm_family',
+        name: 'Gia đình ấm áp (solo)',
+        prompt: 'Warm homey solo portrait, framed by family photo in background, natural window light, 35mm, cozy neutral palette, no text.'
+    },
+    {
+        id: 'monochrome_minimal',
+        name: 'Monochrome minimal',
+        prompt: 'Monochrome minimal portrait (all-black or all-beige), clean seamless backdrop to match, soft top with edge light, 85mm refined stance, no text.'
     }
+];
+
+export const TRAVEL_OUTFITS: {id: string, name: string, thumbnail: string, prompt: string}[] = [
+    {
+        id: 'china_hanfu',
+        name: 'Cổ trang Trung Quốc',
+        thumbnail: 'https://storage.googleapis.com/gemini-ui-params/images/travel_outfit_hanfu.jpeg',
+        prompt: 'wearing a beautiful, traditional red and gold Chinese Hanfu with intricate embroidery and long flowing sleeves'
+    },
+    {
+        id: 'korea_hanbok',
+        name: 'Hanbok Hàn Quốc',
+        thumbnail: 'https://storage.googleapis.com/gemini-ui-params/images/travel_outfit_hanbok.jpeg',
+        prompt: 'wearing an elegant traditional Korean Hanbok with a pastel-colored, high-waisted chima (skirt) and a jeogori (jacket)'
+    },
+    {
+        id: 'japan_kimono',
+        name: 'Kimono Nhật Bản',
+        thumbnail: 'https://storage.googleapis.com/gemini-ui-params/images/travel_outfit_kimono.jpeg',
+        prompt: 'wearing a vibrant, traditional Japanese Kimono with a floral pattern and a wide obi sash'
+    },
+    {
+        id: 'india_sari',
+        name: 'Sari Ấn Độ',
+        thumbnail: 'https://storage.googleapis.com/gemini-ui-params/images/travel_outfit_sari.jpeg',
+        prompt: 'wearing a luxurious, colorful Indian Sari made of silk with golden borders, draped gracefully'
+    },
+    {
+        id: 'vietnam_aodai',
+        name: 'Áo dài Việt Nam',
+        thumbnail: 'https://storage.googleapis.com/gemini-ui-params/images/travel_outfit_aodai.jpeg',
+        prompt: 'wearing a graceful white Vietnamese Ao Dai, the national dress of Vietnam'
+    },
+    {
+        id: 'bohemian',
+        name: 'Bohemian Chic',
+        thumbnail: 'https://storage.googleapis.com/gemini-ui-params/images/travel_outfit_boho.jpeg',
+        prompt: 'wearing a stylish bohemian outfit with a long, flowing maxi skirt, a crochet top, and layered jewelry'
+    },
+];
+
+export const TRAVEL_LOCATIONS: {id: string, name: string, thumbnail: string, prompt: string}[] = [
+    {
+        id: 'forbidden_city',
+        name: 'Tử Cấm Thành, TQ',
+        thumbnail: 'https://storage.googleapis.com/gemini-ui-params/images/travel_loc_forbidden_city.jpeg',
+        prompt: 'standing in the grand courtyard of the Forbidden City in Beijing, with ancient palaces and red walls in the background'
+    },
+    {
+        id: 'gyeongbokgung',
+        name: 'Cung Gyeongbok, HQ',
+        thumbnail: 'https://storage.googleapis.com/gemini-ui-params/images/travel_loc_gyeongbokgung.jpeg',
+        prompt: 'posing in front of the majestic Gyeongbokgung Palace in Seoul, South Korea, with traditional Korean architecture surrounding them'
+    },
+    {
+        id: 'kyoto_street',
+        name: 'Phố cổ Kyoto, NB',
+        thumbnail: 'https://storage.googleapis.com/gemini-ui-params/images/travel_loc_kyoto.jpeg',
+        prompt: 'walking through a historic street in Gion, Kyoto, Japan, with traditional wooden machiya houses and cherry blossoms'
+    },
+    {
+        id: 'taj_mahal',
+        name: 'Đền Taj Mahal, Ấn Độ',
+        thumbnail: 'https://storage.googleapis.com/gemini-ui-params/images/travel_loc_taj_mahal.jpeg',
+        prompt: 'standing before the iconic Taj Mahal in Agra, India, during sunrise with the marble mausoleum reflected in the pool'
+    },
+    {
+        id: 'santorini',
+        name: 'Santorini, Hy Lạp',
+        thumbnail: 'https://storage.googleapis.com/gemini-ui-params/images/travel_loc_santorini.jpeg',
+        prompt: 'looking out over the Aegean Sea from a scenic viewpoint in Oia, Santorini, Greece, with iconic white and blue buildings'
+    },
+     {
+        id: 'paris_eiffel',
+        name: 'Tháp Eiffel, Pháp',
+        thumbnail: 'https://storage.googleapis.com/gemini-ui-params/images/travel_loc_eiffel.jpeg',
+        prompt: 'having a picnic on the Champ de Mars in Paris, France, with the Eiffel Tower in the background on a sunny day'
+    },
 ];
 
 
@@ -181,6 +287,7 @@ export const PROMPT_SUGGESTION_TAGS: Record<string, string[]> = {
     "Chi tiết (Detail)": ["highly detailed", "4k", "8k", "sharp focus", "intricate details", "masterpiece"],
     "Ánh sáng (Lighting)": ["volumetric lighting", "dramatic lighting", "studio lighting", "golden hour", "neon lighting", "rim light"],
     "Màu sắc (Color)": ["vibrant colors", "monochromatic", "pastel colors", "black and white"],
+    "Kiểm soát Camera (Shot Type)": ["wide-angle shot", "macro shot", "low-angle perspective", "dutch angle", "long shot", "medium shot", "close-up shot", "pov", "overhead shot", "bokeh"],
 };
 
 export const EDIT_FORM_TAGS = PROMPT_SUGGESTION_TAGS;

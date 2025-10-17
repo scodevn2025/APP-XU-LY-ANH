@@ -1,7 +1,9 @@
+
+
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 // Fix: Renamed ImageData to LocalImageData
-import type { AppMode, GenerateOptions, EditOptions, SwapOptions, MagicOptions, AnalyzeOptions, AspectRatio, MagicAction, LocalImageData, OutputQuality, VideoOptions, ImageGenerateOptions, VideoAnalysisOptions, PhotoRestoreOptions, AutoFilterStyle } from '../types';
-import { ASPECT_RATIOS, MAGIC_ACTIONS, PROMPT_SUGGESTION_TAGS, EDIT_FORM_TAGS, OUTPUT_QUALITIES, MODES, CONCEPTS, AUTO_FILTER_STYLES } from '../constants';
+import type { AppMode, GenerateOptions, EditOptions, SwapOptions, MagicOptions, AnalyzeOptions, AspectRatio, MagicAction, LocalImageData, OutputQuality, VideoOptions, ImageGenerateOptions, VideoAnalysisOptions, PhotoRestoreOptions, AutoFilterStyle, AITravelOptions } from '../types';
+import { ASPECT_RATIOS, MAGIC_ACTIONS, PROMPT_SUGGESTION_TAGS, EDIT_FORM_TAGS, OUTPUT_QUALITIES, MODES, AI_TRAVEL_CONCEPTS, AUTO_FILTER_STYLES, TRAVEL_LOCATIONS, TRAVEL_OUTFITS } from '../constants';
 import { ImageUploader, MultiImageUploader, VideoUploader } from './ImageUploader';
 import { SpinnerIcon } from './icons/SpinnerIcon';
 import { SparklesIcon } from './icons/SparklesIcon';
@@ -15,6 +17,7 @@ import { DownloadIcon } from './icons/DownloadIcon';
 import { ZoomIcon } from './icons/ZoomIcon';
 import { HistoryIcon } from './icons/HistoryIcon';
 import { TrashIcon } from './icons/TrashIcon';
+import { ConceptSelector } from './ConceptSelector';
 
 
 interface InitialVideoOptions {
@@ -38,6 +41,8 @@ interface ControlPanelProps {
   onZoomImage: (url: string) => void;
   promptHistory: string[];
   onClearPromptHistory: () => void;
+  isVeoKeySelected?: boolean;
+  onVeoKeySelect?: () => void;
 }
 
 const QualitySelector: React.FC<{ quality: OutputQuality['id'], onQualityChange: (q: OutputQuality['id']) => void }> = ({ quality, onQualityChange }) => (
@@ -244,7 +249,7 @@ const PromptAssistant: React.FC<{ onTagClick: (tag: string) => void, tags: Recor
     );
 };
 
-const VideoForm: React.FC<Omit<ControlPanelProps, 'mode' | 'onZoomImage'>> = ({ onSubmit, isLoading, cooldown, initialVideoOptions, onClearInitialVideoOptions, quality, onQualityChange, apiKey, promptHistory, onClearPromptHistory }) => {
+const VideoForm: React.FC<Omit<ControlPanelProps, 'mode' | 'onZoomImage'>> = ({ onSubmit, isLoading, cooldown, initialVideoOptions, onClearInitialVideoOptions, quality, onQualityChange, apiKey, promptHistory, onClearPromptHistory, isVeoKeySelected, onVeoKeySelect }) => {
     const [prompt, setPrompt] = useState('');
     const [aspectRatio, setAspectRatio] = useState<AspectRatio>('9:16');
     // Fix: Renamed ImageData to LocalImageData
@@ -274,8 +279,8 @@ const VideoForm: React.FC<Omit<ControlPanelProps, 'mode' | 'onZoomImage'>> = ({ 
         setPrompt(p => p ? `${p}, ${tag}` : tag);
     };
     
-    const isDisabled = !apiKey || isLoading || cooldown > 0 || !prompt.trim();
-    const buttonTitle = !apiKey ? "Vui lòng nhập API Key để sử dụng tính năng này." : "";
+    const isDisabled = !apiKey || isLoading || cooldown > 0 || !prompt.trim() || !isVeoKeySelected;
+    const buttonTitle = !apiKey ? "Vui lòng nhập API Key để sử dụng tính năng này." : !isVeoKeySelected ? "Vui lòng chọn một Dự án & API Key cho Veo trước." : "";
 
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -323,6 +328,22 @@ const VideoForm: React.FC<Omit<ControlPanelProps, 'mode' | 'onZoomImage'>> = ({ 
                 </div>
             </div>
 
+            {!isVeoKeySelected && (
+                <div className="p-3 my-2 bg-amber-900/50 border border-amber-700/80 rounded-lg text-center space-y-3 animate-fade-in-down">
+                    <p className="text-sm text-amber-200">
+                        Để tạo video với Veo, bạn cần chọn một dự án đã bật thanh toán.
+                        <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer" className="underline font-semibold ml-1 hover:text-white">Tìm hiểu thêm</a>.
+                    </p>
+                    <button
+                        type="button"
+                        onClick={onVeoKeySelect}
+                        className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white font-medium rounded-md text-sm shadow-md hover:shadow-lg transition-all"
+                    >
+                        Chọn Dự án & API Key
+                    </button>
+                </div>
+            )}
+
             <p className="text-xs text-gray-500 mt-1 px-1">Lưu ý: Quá trình tạo video có thể mất vài phút.</p>
 
             <QualitySelector quality={quality} onQualityChange={onQualityChange} />
@@ -345,18 +366,18 @@ const GenerateForm: React.FC<Omit<ControlPanelProps, 'mode' | 'onZoomImage'>> = 
   const [prompt, setPrompt] = useState('');
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('9:16');
   const [numberOfImages, setNumberOfImages] = useState(4);
-  const [referenceImage, setReferenceImage] = useState<LocalImageData | null>(null);
+  const [referenceImages, setReferenceImages] = useState<LocalImageData[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   useEffect(() => {
-    if (!referenceImage) {
+    if (referenceImages.length !== 1) {
         return;
     }
     const analyze = async () => {
         setIsAnalyzing(true);
         setPrompt(''); // Clear previous prompt
         try {
-            const description = await geminiService.analyzeImage(apiKey, { image: referenceImage });
+            const description = await geminiService.analyzeImage(apiKey, { image: referenceImages[0] });
             setPrompt(description);
         } catch (e: any) {
             console.error("Image analysis failed:", e);
@@ -366,7 +387,7 @@ const GenerateForm: React.FC<Omit<ControlPanelProps, 'mode' | 'onZoomImage'>> = 
         }
     };
     analyze();
-  }, [referenceImage, apiKey]);
+  }, [referenceImages, apiKey]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -378,7 +399,7 @@ const GenerateForm: React.FC<Omit<ControlPanelProps, 'mode' | 'onZoomImage'>> = 
         prompt, 
         aspectRatio, 
         numberOfImages,
-        image: referenceImage || undefined
+        images: referenceImages,
     };
     onSubmit(options);
   };
@@ -392,12 +413,12 @@ const GenerateForm: React.FC<Omit<ControlPanelProps, 'mode' | 'onZoomImage'>> = 
   const buttonText = () => {
       if (isLoading) return 'Đang tạo...';
       if (cooldown > 0) return `Vui lòng đợi (${cooldown}s)`;
-      return referenceImage ? 'Tạo biến thể' : 'Tạo ảnh';
+      return referenceImages.length > 0 ? 'Tạo biến thể' : 'Tạo ảnh';
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-        <ImageUploader label="Ảnh tham chiếu (tùy chọn)" image={referenceImage} onImageChange={setReferenceImage} />
+        <MultiImageUploader label="Ảnh tham chiếu (tối đa 3)" images={referenceImages} onImagesChange={setReferenceImages} limit={3} />
       <div>
         <div className="flex justify-between items-center mb-2">
             <label htmlFor="prompt-generate" className="block text-sm font-medium text-gray-300">Mô tả (Prompt)</label>
@@ -416,7 +437,7 @@ const GenerateForm: React.FC<Omit<ControlPanelProps, 'mode' | 'onZoomImage'>> = 
         <PromptSuggestions 
             apiKey={apiKey} 
             prompt={prompt} 
-            images={referenceImage ? [referenceImage] : undefined}
+            images={referenceImages}
             onSelect={setPrompt} 
             mode="generate" 
         />
@@ -453,6 +474,115 @@ const GenerateForm: React.FC<Omit<ControlPanelProps, 'mode' | 'onZoomImage'>> = 
           />
        </div>
       
+      <QualitySelector quality={quality} onQualityChange={onQualityChange} />
+
+      <button
+        type="submit"
+        disabled={isDisabled}
+        title={buttonTitle}
+        className="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 focus:ring-offset-gray-900 disabled:bg-indigo-400 disabled:cursor-not-allowed mt-4 transition-transform duration-200 hover:scale-105 active:scale-95"
+      >
+        {isLoading && <SpinnerIcon />}
+        {buttonText()}
+      </button>
+    </form>
+  );
+};
+
+const ProductShotForm: React.FC<Omit<ControlPanelProps, 'mode' | 'onZoomImage'>> = ({ onSubmit, isLoading, cooldown, quality, onQualityChange, apiKey, promptHistory, onClearPromptHistory }) => {
+  const [prompt, setPrompt] = useState('');
+  const [aspectRatio, setAspectRatio] = useState<AspectRatio>('4:3');
+  const [numberOfImages, setNumberOfImages] = useState(4);
+  const [image, setImage] = useState<LocalImageData | null>(null);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!image) {
+        alert("Vui lòng tải lên ảnh sản phẩm.");
+        return;
+    }
+    if (!prompt.trim()) {
+        alert("Vui lòng nhập mô tả ý tưởng.");
+        return;
+    }
+    const options: GenerateOptions = {
+        prompt,
+        aspectRatio,
+        numberOfImages,
+        images: image ? [image] : [],
+    };
+    onSubmit(options);
+  };
+
+  const handleTagClick = (tag: string) => {
+      setPrompt(p => p ? `${p}, ${tag}` : tag);
+  }
+
+  const isDisabled = !apiKey || isLoading || cooldown > 0 || !prompt.trim() || !image;
+  const buttonTitle = !apiKey ? "Vui lòng nhập API Key để sử dụng tính năng này." : !image ? "Vui lòng tải lên ảnh sản phẩm" : "";
+  const buttonText = () => {
+      if (isLoading) return 'Đang tạo...';
+      if (cooldown > 0) return `Vui lòng đợi (${cooldown}s)`;
+      return 'Tạo ảnh sản phẩm';
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+        <ImageUploader label="Ảnh sản phẩm" image={image} onImageChange={setImage} />
+      <div>
+        <div className="flex justify-between items-center mb-2">
+            <label htmlFor="prompt-product" className="block text-sm font-medium text-gray-300">Mô tả ý tưởng</label>
+            <PromptHistoryDropdown history={promptHistory} onSelect={setPrompt} onClear={onClearPromptHistory} />
+        </div>
+        <textarea
+          id="prompt-product"
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          rows={5}
+          className="w-full bg-gray-900 border border-gray-600 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-white p-2"
+          placeholder={"VD: một chai nước hoa đặt trên phiến đá ướt, xung quanh là rêu xanh, ánh sáng mềm mại chiếu từ bên cạnh"}
+        />
+        <PromptAssistant onTagClick={handleTagClick} tags={PROMPT_SUGGESTION_TAGS} />
+        <PromptSuggestions
+            apiKey={apiKey}
+            prompt={prompt}
+            images={image ? [image] : undefined}
+            onSelect={setPrompt}
+            mode="generate"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-300 mb-2">Tỷ lệ khung hình</label>
+        <div className="flex flex-wrap gap-2">
+          {ASPECT_RATIOS.map((ratio) => (
+            <button
+              type="button"
+              key={ratio}
+              onClick={() => setAspectRatio(ratio)}
+              className={`flex-1 p-2 border rounded-md text-xs transition-colors ${
+                aspectRatio === ratio ? 'bg-indigo-600 border-indigo-500' : 'bg-gray-700 border-gray-600 hover:bg-gray-600'
+              }`}
+            >
+              {ratio}
+            </button>
+          ))}
+        </div>
+      </div>
+
+       <div>
+          <label htmlFor="numberOfImages-product" className="block text-sm font-medium text-gray-300 mb-2">Số lượng ảnh: {numberOfImages}</label>
+          <input
+            type="range"
+            id="numberOfImages-product"
+            min="1"
+            max="4"
+            value={numberOfImages}
+            onChange={e => setNumberOfImages(Number(e.target.value))}
+            className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+          />
+       </div>
+
       <QualitySelector quality={quality} onQualityChange={onQualityChange} />
 
       <button
@@ -1409,6 +1539,202 @@ const PhotoRestoreForm: React.FC<Omit<ControlPanelProps, 'mode' | 'onZoomImage' 
     );
 };
 
+const AITravelForm: React.FC<Omit<ControlPanelProps, 'mode' | 'onZoomImage'>> = ({ onSubmit, isLoading, cooldown, quality, onQualityChange, apiKey, promptHistory, onClearPromptHistory }) => {
+    const [characterImages, setCharacterImages] = useState<LocalImageData[]>([]);
+    const [selectedOutfitId, setSelectedOutfitId] = useState<string | null>(null);
+    const [customOutfitPrompt, setCustomOutfitPrompt] = useState('');
+    const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null);
+    const [customLocationPrompt, setCustomLocationPrompt] = useState('');
+    const [customPrompt, setCustomPrompt] = useState('');
+    const [numberOfImages, setNumberOfImages] = useState(2);
+    const [aspectRatio, setAspectRatio] = useState<AspectRatio>('9:16');
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+
+        const outfitPrompt = selectedOutfitId === 'custom'
+            ? customOutfitPrompt
+            : TRAVEL_OUTFITS.find(o => o.id === selectedOutfitId)?.prompt || '';
+
+        const locationPrompt = selectedLocationId === 'custom'
+            ? customLocationPrompt
+            : TRAVEL_LOCATIONS.find(l => l.id === selectedLocationId)?.prompt || '';
+        
+        if (characterImages.length === 0) {
+            alert("Vui lòng tải ảnh của bạn.");
+            return;
+        }
+
+        const options: AITravelOptions = {
+            characterImages,
+            outfitPrompt,
+            locationPrompt,
+            customPrompt,
+            aspectRatio,
+            numberOfImages,
+        };
+        onSubmit(options);
+    };
+    
+    const handleTagClick = (tag: string) => {
+      setCustomPrompt(p => p ? `${p}, ${tag}` : tag);
+    };
+
+    const isDisabled = !apiKey || isLoading || cooldown > 0 || characterImages.length === 0;
+    const buttonTitle = !apiKey ? "Vui lòng nhập API Key." : characterImages.length === 0 ? "Vui lòng tải ảnh của bạn." : "";
+    
+    return (
+        <form onSubmit={handleSubmit} className="space-y-6">
+            <div>
+                <h3 className="text-lg font-semibold text-white mb-2 border-b border-gray-700 pb-2">Bước 1: Tải ảnh của bạn</h3>
+                <MultiImageUploader label="Ảnh chân dung rõ mặt (tối đa 3)" images={characterImages} onImagesChange={setCharacterImages} limit={3} />
+            </div>
+
+            <div>
+                <h3 className="text-lg font-semibold text-white mb-2 border-b border-gray-700 pb-2">Bước 2: Chọn trang phục &amp; địa điểm (tùy chọn)</h3>
+                <div className="mb-4 mt-4">
+                    <p className="text-sm font-semibold text-gray-300 mb-2">Trang phục</p>
+                    <div className="flex flex-wrap gap-2">
+                        {TRAVEL_OUTFITS.map(outfit => (
+                            <button
+                                key={outfit.id}
+                                type="button"
+                                onClick={() => setSelectedOutfitId(outfit.id)}
+                                className={`px-3 py-1 bg-gray-700 text-xs text-gray-300 rounded-full hover:bg-gray-600 transition-colors ${
+                                    selectedOutfitId === outfit.id ? 'bg-indigo-600 text-white ring-2 ring-indigo-400' : ''
+                                }`}
+                            >
+                                {selectedOutfitId === outfit.id ? '✓' : '+'} {outfit.name}
+                            </button>
+                        ))}
+                         <button
+                            key="custom"
+                            type="button"
+                            onClick={() => setSelectedOutfitId('custom')}
+                            className={`px-3 py-1 text-xs rounded-full transition-colors ${
+                                selectedOutfitId === 'custom' 
+                                ? 'bg-red-600 text-white ring-2 ring-red-400' 
+                                : 'bg-amber-800/60 text-amber-200 hover:bg-amber-700/60'
+                            }`}
+                        >
+                            {selectedOutfitId === 'custom' ? '✓' : '+'} Khác...
+                        </button>
+                    </div>
+                    {selectedOutfitId === 'custom' && (
+                        <textarea
+                            value={customOutfitPrompt}
+                            onChange={(e) => setCustomOutfitPrompt(e.target.value)}
+                            rows={2}
+                            className="mt-3 w-full bg-gray-900 border border-gray-600 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-white p-2"
+                            placeholder="Nhập mô tả trang phục của bạn, VD: mặc một bộ váy dạ hội lấp lánh màu đen"
+                        />
+                    )}
+                </div>
+                <div>
+                    <p className="text-sm font-semibold text-gray-300 mb-2">Địa điểm</p>
+                     <div className="flex flex-wrap gap-2">
+                        {TRAVEL_LOCATIONS.map(location => (
+                            <button
+                                key={location.id}
+                                type="button"
+                                onClick={() => setSelectedLocationId(location.id)}
+                                className={`px-3 py-1 bg-gray-700 text-xs text-gray-300 rounded-full hover:bg-gray-600 transition-colors ${
+                                    selectedLocationId === location.id ? 'bg-indigo-600 text-white ring-2 ring-indigo-400' : ''
+                                }`}
+                            >
+                                {selectedLocationId === location.id ? '✓' : '+'} {location.name}
+                            </button>
+                        ))}
+                         <button
+                            key="custom"
+                            type="button"
+                            onClick={() => setSelectedLocationId('custom')}
+                            className={`px-3 py-1 text-xs rounded-full transition-colors ${
+                                selectedLocationId === 'custom' 
+                                ? 'bg-red-600 text-white ring-2 ring-red-400' 
+                                : 'bg-amber-800/60 text-amber-200 hover:bg-amber-700/60'
+                            }`}
+                        >
+                            {selectedLocationId === 'custom' ? '✓' : '+'} Khác...
+                        </button>
+                    </div>
+                     {selectedLocationId === 'custom' && (
+                        <textarea
+                            value={customLocationPrompt}
+                            onChange={(e) => setCustomLocationPrompt(e.target.value)}
+                            rows={2}
+                            className="mt-3 w-full bg-gray-900 border border-gray-600 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-white p-2"
+                            placeholder="Nhập mô tả địa điểm của bạn, VD: đứng trên một con đường lát sỏi ở một ngôi làng Ý cổ kính"
+                        />
+                    )}
+                </div>
+            </div>
+
+
+             <div>
+                <h3 className="text-lg font-semibold text-white mb-2 border-b border-gray-700 pb-2">Bước 3: Tinh chỉnh (tùy chọn)</h3>
+                <div className="space-y-4 mt-4">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-300 mb-2">Gợi ý Concept Chụp ảnh</p>
+                      <div className="flex flex-wrap gap-2">
+                        {AI_TRAVEL_CONCEPTS.map(concept => (
+                          <button
+                            key={concept.id}
+                            type="button"
+                            onClick={() => setCustomPrompt(concept.prompt)}
+                            className={`px-3 py-1 bg-gray-700 text-xs text-gray-300 rounded-full hover:bg-gray-600 transition-colors ${
+                              customPrompt === concept.prompt ? 'bg-indigo-600 text-white ring-2 ring-indigo-400' : ''
+                            }`}
+                          >
+                            + {concept.name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                        <div className="flex justify-between items-center mb-2">
+                            <label htmlFor="prompt-travel" className="block text-sm font-medium text-gray-300">Thêm chi tiết</label>
+                            <PromptHistoryDropdown history={promptHistory} onSelect={setCustomPrompt} onClear={onClearPromptHistory} />
+                        </div>
+                        <textarea
+                            id="prompt-travel"
+                            value={customPrompt}
+                            onChange={(e) => setCustomPrompt(e.target.value)}
+                            rows={3}
+                            className="w-full bg-gray-900 border border-gray-600 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-white p-2"
+                            placeholder="VD: mỉm cười rạng rỡ, nhìn vào máy ảnh, ánh sáng hoàng hôn"
+                        />
+                        <PromptAssistant onTagClick={handleTagClick} tags={PROMPT_SUGGESTION_TAGS} />
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">Tỷ lệ khung hình</label>
+                        <div className="flex flex-wrap gap-2">
+                            {ASPECT_RATIOS.map((ratio) => (
+                                <button type="button" key={ratio} onClick={() => setAspectRatio(ratio)} className={`flex-1 p-2 border rounded-md text-xs transition-colors ${aspectRatio === ratio ? 'bg-indigo-600 border-indigo-500' : 'bg-gray-700 border-gray-600 hover:bg-gray-600'}`}>
+                                    {ratio}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div>
+                        <label htmlFor="numberOfImages-travel" className="block text-sm font-medium text-gray-300 mb-2">Số lượng ảnh: {numberOfImages}</label>
+                        <input type="range" id="numberOfImages-travel" min="1" max="4" value={numberOfImages} onChange={e => setNumberOfImages(Number(e.target.value))} className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer" />
+                    </div>
+
+                    <QualitySelector quality={quality} onQualityChange={onQualityChange} />
+                </div>
+            </div>
+
+            <button type="submit" disabled={isDisabled} title={buttonTitle} className="w-full flex items-center justify-center px-4 py-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 focus:ring-offset-gray-900 disabled:bg-indigo-400 disabled:cursor-not-allowed mt-4 transition-transform duration-200 hover:scale-105 active:scale-95">
+                {isLoading && <SpinnerIcon />}
+                {isLoading ? 'Đang tạo ảnh...' : cooldown > 0 ? `Vui lòng đợi (${cooldown}s)` : 'Bắt đầu chuyến du lịch!'}
+            </button>
+        </form>
+    );
+};
+
 
 export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
     const { mode } = props;
@@ -1422,6 +1748,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
         switch (mode) {
             case 'generate': return GenerateForm;
             case 'image-generate': return ImageGenerateForm;
+            case 'product-shot': return ProductShotForm;
+            case 'ai-travel': return AITravelForm;
             case 'edit': return EditForm;
             case 'magic': return MagicForm;
             case 'photo-restore': return PhotoRestoreForm;

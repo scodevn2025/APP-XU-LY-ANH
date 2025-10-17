@@ -5,8 +5,9 @@ import { Toast } from './Toast';
 import * as geminiService from '../services/geminiService';
 import * as cloudinaryService from '../services/cloudinaryService';
 // Fix: Renamed ImageData to LocalImageData to avoid conflict with the built-in DOM type.
-import type { AppMode, OutputQuality, LocalImageData, GenerateOptions, EditOptions, SwapOptions, MagicOptions, AnalyzeOptions, VideoOptions, HistoryItem, ImageGenerateOptions, AspectRatio, VideoAnalysisOptions, PhotoRestoreOptions } from '../types';
-import { MODES, CONCEPTS } from '../constants';
+import type { AppMode, OutputQuality, LocalImageData, GenerateOptions, EditOptions, SwapOptions, MagicOptions, AnalyzeOptions, VideoOptions, HistoryItem, ImageGenerateOptions, AspectRatio, VideoAnalysisOptions, PhotoRestoreOptions, AITravelOptions } from '../types';
+// FIX: Removed unused 'CONCEPTS' import as it is not an exported member.
+import { MODES } from '../constants';
 import { ApiKeyModal } from './ApiKeyModal';
 import { KeyIcon } from './icons/KeyIcon';
 import { LogoIcon } from './icons/LogoIcon';
@@ -38,6 +39,7 @@ const App: React.FC = () => {
   const [view, setView] = useState<MainView>('studio');
   const [zoomedImageUrl, setZoomedImageUrl] = useState<string | null>(null);
   const [lastUsedAspectRatio, setLastUsedAspectRatio] = useState<AspectRatio>('9:16');
+  const [isVeoKeySelected, setIsVeoKeySelected] = useState(false);
 
 
   useEffect(() => {
@@ -58,6 +60,11 @@ const App: React.FC = () => {
       } catch (e: any) {
         console.error("Failed to load history from DB:", e);
         setError(e.message || "Could not load history from the database.");
+      }
+
+      if ((window as any).aistudio?.hasSelectedApiKey) {
+        const hasKey = await (window as any).aistudio.hasSelectedApiKey();
+        setIsVeoKeySelected(hasKey);
       }
     };
     loadInitialData();
@@ -94,6 +101,16 @@ const App: React.FC = () => {
     setApiKey(key);
     localStorage.setItem('gemini-api-key', key);
     setIsApiKeyModalOpen(false);
+  };
+  
+  const handleVeoKeySelection = async () => {
+    if ((window as any).aistudio?.openSelectKey) {
+        await (window as any).aistudio.openSelectKey();
+        // Optimistically assume the user selected a key to avoid race conditions.
+        setIsVeoKeySelected(true); 
+    } else {
+        setError("API key selection is not available in this environment.");
+    }
   };
 
   const startCooldown = (seconds: number) => {
@@ -159,22 +176,30 @@ const App: React.FC = () => {
       switch (mode) {
         case 'generate':
           const genOptions = options as GenerateOptions;
-          if (genOptions.image) {
-              // This is an image variation task
-              const magicOptions: MagicOptions = {
-                  action: 'creative',
-                  image: genOptions.image,
+          if (genOptions.images && genOptions.images.length > 0) {
+              // Use the more powerful editImage for multi-image context
+              response = await geminiService.editImage(apiKey, {
                   prompt: genOptions.prompt,
-                  numberOfImages: genOptions.numberOfImages,
+                  characterImages: genOptions.images,
                   aspectRatio: genOptions.aspectRatio,
-              };
-              response = await geminiService.magicEdit(apiKey, magicOptions);
+                  numberOfVariations: genOptions.numberOfImages,
+              });
           } else {
               // Standard text-to-image
               response = await geminiService.generateImages(apiKey, genOptions);
           }
           promptToSave = options.prompt;
           startCooldown(10);
+          break;
+        case 'product-shot':
+          response = await geminiService.generateProductShot(apiKey, options as GenerateOptions);
+          promptToSave = options.prompt;
+          startCooldown(10);
+          break;
+        case 'ai-travel':
+          response = await geminiService.generateAITravelImage(apiKey, options as AITravelOptions);
+          promptToSave = `${options.customPrompt} (Trang phục: ${options.outfitPrompt}, Địa điểm: ${options.locationPrompt})`;
+          startCooldown(15);
           break;
         case 'image-generate':
           response = await geminiService.recomposeImage(apiKey, options as ImageGenerateOptions);
@@ -278,6 +303,10 @@ const App: React.FC = () => {
       if (typeof errorMessage === 'string' && (errorMessage.includes('quota') || errorMessage.includes('RESOURCE_EXHAUSTED'))) {
           errorMessage = 'Bạn đã vượt quá hạn ngạch sử dụng Gemini API. Vui lòng kiểm tra tài khoản Google AI Studio của bạn hoặc thêm phương thức thanh toán để tiếp tục.';
       }
+      if (mode === 'video' && typeof errorMessage === 'string' && (errorMessage.includes('Requested entity was not found') || errorMessage.includes('NOT_FOUND'))) {
+          setIsVeoKeySelected(false);
+          errorMessage = "Dự án hoặc API key của bạn chưa được cấu hình cho Veo. Vui lòng chọn một dự án hợp lệ đã bật thanh toán và thử lại.";
+      }
       setError(errorMessage);
     } finally {
       setIsLoading(false);
@@ -316,6 +345,27 @@ const App: React.FC = () => {
       setError(e.message || "Could not clear prompt history from the database.");
     }
   };
+  
+  const getNavButtonClasses = (buttonModeId: AppMode, activeModeId: AppMode): string => {
+    const baseClasses = 'flex items-center justify-start gap-3 flex-shrink-0 md:w-full p-3 rounded-lg text-sm font-medium transition-colors';
+    const isActive = buttonModeId === activeModeId;
+
+    switch (buttonModeId) {
+      case 'ai-travel':
+        return `${baseClasses} ${isActive 
+          ? 'bg-sky-600 text-white shadow-lg shadow-sky-500/20' 
+          : 'text-gray-400 hover:bg-sky-700/50 hover:text-white'}`;
+      case 'product-shot':
+        return `${baseClasses} ${isActive 
+          ? 'bg-amber-600 text-white shadow-lg shadow-amber-500/20' 
+          : 'text-gray-400 hover:bg-amber-700/50 hover:text-white'}`;
+      default:
+        return `${baseClasses} ${isActive 
+          ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' 
+          : 'text-gray-400 hover:bg-indigo-700/50 hover:text-white'}`;
+    }
+  };
+
 
   return (
     <div className="min-h-screen bg-gray-900 text-white font-sans">
@@ -358,7 +408,7 @@ const App: React.FC = () => {
                       setQuality('hd');
                     }
                   }}
-                  className={`flex items-center justify-start gap-3 flex-shrink-0 md:w-full p-3 rounded-lg text-sm font-medium transition-colors ${mode === m.id ? 'bg-gray-700/80 text-white' : 'text-gray-400 hover:bg-gray-700/50 hover:text-white'}`}
+                  className={getNavButtonClasses(m.id, mode)}
                   aria-pressed={mode === m.id}
                 >
                   <Icon />
@@ -404,6 +454,8 @@ const App: React.FC = () => {
                         onZoomImage={setZoomedImageUrl}
                         promptHistory={promptHistory}
                         onClearPromptHistory={handleClearPromptHistory}
+                        isVeoKeySelected={isVeoKeySelected}
+                        onVeoKeySelect={handleVeoKeySelection}
                       />
                     </aside>
 

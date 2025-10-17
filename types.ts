@@ -1,6 +1,6 @@
 import React from 'react';
 
-export type AppMode = 'generate' | 'image-generate' | 'edit' | 'magic' | 'analyze' | 'video' | 'video-analysis' | 'photo-restore';
+export type AppMode = 'generate' | 'image-generate' | 'edit' | 'magic' | 'analyze' | 'video' | 'video-analysis' | 'photo-restore' | 'product-shot' | 'ai-travel';
 export type AspectRatio = '1:1' | '3:4' | '4:3' | '9:16' | '16:9';
 export type MagicAction = 'creative' | 'upscale' | 'remove-bg' | 'remove-object' | 'change-background' | 'fix-colors' | 'auto-filter';
 export type AutoFilterStyle = 'vintage' | 'cinematic-teal-orange' | 'dramatic-bw' | 'vibrant-pop' | 'soft-dreamy' | 'matte-moody' | 'high-contrast-bw' | 'cyberpunk-neon' | 'portra-film' | 'creamy-skin' | 'golden-hour-pop' | 'creamy-bw' | 'punchy-landscape' | 'cinematic-landscape' | 'moody-forest';
@@ -31,7 +31,7 @@ export interface GenerateOptions {
     prompt: string;
     aspectRatio: AspectRatio;
     numberOfImages: number;
-    image?: LocalImageData;
+    images?: LocalImageData[];
 }
 
 export interface ImageGenerateOptions {
@@ -48,6 +48,15 @@ export interface ConceptOptions {
   characterImage: LocalImageData;
   conceptPrompt: string;
   numberOfImages: number;
+}
+
+export interface AITravelOptions {
+    characterImages: LocalImageData[];
+    outfitPrompt: string;
+    locationPrompt: string;
+    customPrompt: string;
+    aspectRatio: AspectRatio;
+    numberOfImages: number;
 }
 
 export interface EditOptions {

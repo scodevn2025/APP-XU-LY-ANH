@@ -13,6 +13,7 @@ import type {
   PhotoRestoreOptions,
   ConceptOptions,
   AutoFilterStyle,
+  AITravelOptions,
 } from '../types';
 
 /**
@@ -52,6 +53,19 @@ const getIdentityPreservationDirective = () => `
 - **EXECUTION:** You must perform a technical replication of the SUBJECT's identity. Do not reinterpret, stylize, or alter the person in any way, even to match a new style. The person must look exactly as if they were cut from the original photo and seamlessly integrated into the new scene. All subsequent edits (lighting, etc.) must not compromise this perfect likeness.
 - **FAILURE CONDITION:** Any deviation from the SUBJECT's original appearance is a critical failure.
 `;
+
+/**
+ * A unified, strict set of instructions for the AI to preserve product identity.
+ * @returns A string containing the directive.
+ */
+const getProductIdentityDirective = () => `
+**PRODUCT INTEGRITY DIRECTIVE (NON-NEGOTIABLE):**
+- **SUBJECT:** The product present in the reference image.
+- **RULE:** The identity and appearance of the SUBJECT (shape, color, branding, text, etc.) must be preserved with 100% accuracy. The product itself must not be altered in any way.
+- **EXECUTION:** You must perform a technical replication of the SUBJECT. Place this exact product into a new scene based on the user's description. The original background must be completely replaced. Create a high-quality, professional photograph with realistic lighting, shadows, and perspective that make the product look natural in the new environment.
+- **FOCUS:** The product is the hero of the image.
+- **FAILURE CONDITION:** Any deviation from the SUBJECT's original appearance is a critical failure.`;
+
 
 /**
  * Translates a given text prompt to English using the Gemini API.
@@ -119,6 +133,125 @@ export const generateImages = async (apiKey: string, options: GenerateOptions): 
   }
 
   return successfulImages;
+};
+
+/**
+ * Generates a professional product shot by placing a product into a new scene.
+ * @param apiKey User's API key.
+ * @param options Options including the product image and scene prompt.
+ * @returns A promise that resolves to an array of base64 encoded image strings.
+ */
+export const generateProductShot = async (apiKey: string, options: GenerateOptions): Promise<string[]> => {
+    const ai = getAiClient(apiKey);
+    // Fix: Destructure `images` from options and get the first image, as `GenerateOptions` does not have an `image` property.
+    const { images, prompt, numberOfImages } = options;
+    const image = images?.[0];
+    if (!image) {
+        throw new Error("Product image is required for this function.");
+    }
+    const translatedPrompt = await translateToEnglish(apiKey, prompt);
+
+    const singleImageGeneration = async (): Promise<string> => {
+        const userPrompt = `Take the product from the provided image and place it into a new scene described as: "${translatedPrompt}".
+${getProductIdentityDirective()}`;
+
+        const parts = [imageToPart(image), { text: userPrompt }];
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash-image',
+            contents: { parts },
+            config: { responseModalities: [Modality.IMAGE] },
+        });
+
+        const candidate = response.candidates?.[0];
+        if (!candidate || !candidate.content?.parts?.find(p => p.inlineData)) {
+            const textParts = candidate?.content?.parts?.filter(p => p.text) || [];
+            const textResponse = textParts.map(p => p.text).join(' ');
+            let finishReasonMessage = '';
+            const finishReason = candidate?.finishReason;
+            const safetyRatings = candidate?.safetyRatings;
+            if (finishReason && finishReason !== 'STOP') {
+                finishReasonMessage = ` Quá trình tạo ảnh bị dừng với lý do: ${finishReason}.`;
+                if (finishReason?.includes('SAFETY') && safetyRatings) {
+                    const blockedCategories = safetyRatings.filter(r => r.blocked).map(r => r.category).join(', ');
+                    if (blockedCategories) {
+                        finishReasonMessage += ` Các danh mục bị chặn: ${blockedCategories}. Vui lòng sửa lại prompt hoặc ảnh đầu vào.`;
+                    }
+                }
+            }
+            throw new Error(`Tạo ảnh sản phẩm thất bại. Model không trả về ảnh.${finishReasonMessage} Phản hồi từ model: "${textResponse || 'Không có phản hồi văn bản'}"`);
+        }
+        return candidate.content.parts.find(p => p.inlineData)!.inlineData!.data;
+    };
+
+    const promises = Array(numberOfImages).fill(null).map(() => singleImageGeneration());
+    return Promise.all(promises);
+};
+
+/**
+ * Generates an AI travel postcard by placing a person in a new location with a specific outfit.
+ * @param apiKey User's API key.
+ * @param options Options including the character image, outfit, location, and custom prompt.
+ * @returns A promise that resolves to an array of base64 encoded image strings.
+ */
+export const generateAITravelImage = async (apiKey: string, options: AITravelOptions): Promise<string[]> => {
+    const ai = getAiClient(apiKey);
+    const { characterImages, outfitPrompt, locationPrompt, customPrompt, numberOfImages } = options;
+
+    const translatedOutfit = outfitPrompt?.trim() ? await translateToEnglish(apiKey, outfitPrompt) : '';
+    const translatedLocation = locationPrompt?.trim() ? await translateToEnglish(apiKey, locationPrompt) : '';
+    const translatedCustom = customPrompt?.trim() ? await translateToEnglish(apiKey, customPrompt) : '';
+
+    const singleImageGeneration = async (): Promise<string> => {
+        let textPrompt = `**TASK:** Create a photorealistic photograph.\n\n**ASSETS & INSTRUCTIONS:**\n`;
+        textPrompt += `- **CHARACTER:** The first ${characterImages.length} image(s) contain the person whose identity must be preserved.\n`;
+
+        if (translatedLocation) {
+            textPrompt += `- **SCENE:** Place this person in the following scene: "${translatedLocation}".\n`;
+        }
+        if (translatedOutfit) {
+            textPrompt += `- **OUTFIT:** The person should be wearing: "${translatedOutfit}".\n`;
+        }
+        if (translatedCustom) {
+            textPrompt += `- **DETAILS:** Additional instructions: "${translatedCustom}".\n\n`;
+        } else {
+             textPrompt += `\n`;
+        }
+
+        textPrompt += `${getIdentityPreservationDirective()}`;
+        textPrompt += `\n**EXECUTION:** Combine these elements seamlessly. The highest priority is the perfect, 100% accurate preservation of the person's identity from the reference images.`;
+        
+        const parts = [...characterImages.map(imageToPart), { text: textPrompt }];
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash-image',
+            contents: { parts },
+            config: { responseModalities: [Modality.IMAGE] },
+        });
+
+        const candidate = response.candidates?.[0];
+        if (!candidate || !candidate.content?.parts?.find(p => p.inlineData)) {
+            const textParts = candidate?.content?.parts?.filter(p => p.text) || [];
+            const textResponse = textParts.map(p => p.text).join(' ');
+            let finishReasonMessage = '';
+            const finishReason = candidate?.finishReason;
+            const safetyRatings = candidate?.safetyRatings;
+            if (finishReason && finishReason !== 'STOP') {
+                finishReasonMessage = ` Quá trình tạo ảnh bị dừng với lý do: ${finishReason}.`;
+                if (finishReason?.includes('SAFETY') && safetyRatings) {
+                    const blockedCategories = safetyRatings.filter(r => r.blocked).map(r => r.category).join(', ');
+                    if (blockedCategories) {
+                        finishReasonMessage += ` Các danh mục bị chặn: ${blockedCategories}. Vui lòng sửa lại prompt hoặc ảnh đầu vào.`;
+                    }
+                }
+            }
+            throw new Error(`Tạo ảnh du lịch thất bại. Model không trả về ảnh.${finishReasonMessage} Phản hồi từ model: "${textResponse || 'Không có phản hồi văn bản'}"`);
+        }
+        return candidate.content.parts.find(p => p.inlineData)!.inlineData!.data;
+    };
+
+    const promises = Array(numberOfImages).fill(null).map(() => singleImageGeneration());
+    return Promise.all(promises);
 };
 
 
@@ -201,7 +334,7 @@ export const generateVideo = async (apiKey: string, options: VideoOptions): Prom
   const translatedPrompt = await translateToEnglish(apiKey, options.prompt);
   
   const requestPayload: any = {
-    model: 'veo-2.0-generate-001',
+    model: 'veo-3.1-fast-generate-preview',
     prompt: translatedPrompt,
     config: {
       numberOfVideos: 1,
@@ -249,18 +382,11 @@ export const generateConceptImage = async (apiKey: string, options: ConceptOptio
   const translatedPrompt = await translateToEnglish(apiKey, conceptPrompt);
 
   const singleImageGeneration = async (): Promise<string> => {
-    const systemPrompt = `
-**TASK:** Concept Application
-**MODEL ROLE:** Artistic Scene Generator
-**PRIMARY OBJECTIVE:** Place the exact person from the provided reference image into a new scene described by the concept prompt, while maintaining 100% of the person's original identity.
-
+    const userPrompt = `Take the person from the provided reference image and place them into a new scene based on this concept: "${translatedPrompt}".
 ${getIdentityPreservationDirective()}
-
-**CONCEPT PROMPT:** "${translatedPrompt}"
-
-Now, execute this transformation, ensuring the person from the reference image remains identical and is seamlessly integrated into the new scene.
-`;
-    const parts = [{ text: systemPrompt }, imageToPart(characterImage)];
+The final image must be photorealistic with seamless integration, correct lighting, and shadows. The absolute highest priority is the perfect, 100% accurate preservation of the person's identity from the reference image.`;
+    
+    const parts = [imageToPart(characterImage), { text: userPrompt }];
 
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
@@ -310,17 +436,12 @@ export const magicEdit = async (apiKey: string, options: MagicOptions): Promise<
     const translatedPrompt = await translateToEnglish(apiKey, prompt);
 
     const singleCreativeEdit = async (): Promise<string> => {
-      const systemPrompt = `
-**SUBJECT:** Identity-Preserving Creative Transformation
-**MODEL ROLE:** Contextual Scene Generator
-**PRIMARY OBJECTIVE:** Place the exact person from the provided reference image into a completely new scene or style as described by the user's prompt, while maintaining 100% of the person's original identity.
-
+      const userPrompt = `Take the person from the provided reference image and place them into a completely new scene or style as described here: "${translatedPrompt}".
 ${getIdentityPreservationDirective()}
-
-**USER INSTRUCTION:** "${translatedPrompt}"
-
-Now, execute this creative transformation, ensuring the person remains identical.`;
-      const parts = [{ text: systemPrompt }, imageToPart(image)];
+Execute this creative transformation, ensuring the person remains identical.`;
+      
+      const parts = [imageToPart(image), { text: userPrompt }];
+      
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
         contents: { parts },
@@ -491,30 +612,34 @@ export const editImage = async (apiKey: string, options: EditOptions): Promise<s
 
   const singleImageEdit = async (): Promise<string> => {
       const parts: any[] = [];
-      
-      const systemPrompt = `
-**TASK:** Photocomposition. Your goal is to place the person from the CHARACTER image(s) into a new scene.
-
-**RULES:**
-1.  **IDENTITY LOCK:** Perfectly preserve the identity (face, body shape, skin tone) of the person in the CHARACTER image(s). This is the highest priority.
-2.  **SCENE & PROMPT:** Create a new photorealistic scene based on the user's text prompt: "${translatedPrompt}".
-3.  **ASSET INTEGRATION:** If PRODUCT or BACKGROUND images are provided, integrate them seamlessly.
-4.  **FINAL IMAGE:** The final composed image must have consistent lighting, shadows, and perspective. The person's identity must be perfectly maintained.
-
-Generate the final image based on the following assets.`;
-      parts.push({text: systemPrompt});
-      
-      parts.push({ text: "CHARACTER image(s):" });
       characterImages.forEach(img => parts.push(imageToPart(img)));
-      
       if (productImage) {
-        parts.push({ text: "PRODUCT image:" });
-        parts.push(imageToPart(productImage));
+          parts.push(imageToPart(productImage));
       }
       if (backgroundImage) {
-        parts.push({ text: "BACKGROUND image:" });
-        parts.push(imageToPart(backgroundImage));
+          parts.push(imageToPart(backgroundImage));
       }
+
+      let textPrompt = `**TASK:** Photocomposition. Create a new, photorealistic image based on the user's text prompt: "${translatedPrompt}".\n\n**ASSETS & INSTRUCTIONS:**\n`;
+
+      let assetIndex = 1;
+      if (characterImages.length > 0) {
+          const imageIndices = characterImages.length === 1 ? "The first image contains" : `The first ${characterImages.length} images contain`;
+          textPrompt += `- **CHARACTER(S):** ${imageIndices} the person(s) to be used.\n`;
+          assetIndex += characterImages.length;
+      }
+      if (productImage) {
+          textPrompt += `- **PRODUCT:** Image ${assetIndex} contains a product to be included.\n`;
+          assetIndex++;
+      }
+      if (backgroundImage) {
+          textPrompt += `- **BACKGROUND:** Image ${assetIndex} contains the background scene.\n`;
+      }
+
+      textPrompt += `\n${getIdentityPreservationDirective()}`;
+      textPrompt += `\n**EXECUTION:** Combine these assets according to the user's prompt. The final composed image must have consistent lighting, shadows, and perspective. The person's identity MUST be perfectly maintained.`;
+      
+      parts.push({ text: textPrompt });
 
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
@@ -575,33 +700,24 @@ export const recomposeImage = async (apiKey: string, options: ImageGenerateOptio
     const translatedPrompt = await translateToEnglish(apiKey, prompt);
 
     const singleRecompose = async (): Promise<string> => {
-        const systemInstruction = `**SYSTEM INSTRUCTION: Photorealistic Character Compositing**
+        const userPrompt = `**TASK: Photorealistic Character Compositing**
+You are a Digital Compositor AI.
 
-**ROLE:** Digital Compositor AI.
+**ASSETS:**
+- **Image 1 (CHARACTER):** This is the person. Their identity (face, hair, body shape) is the **IDENTITY VECTOR LOCK** and MUST be preserved with 100% fidelity. Any result that does not look exactly like this person is a failure.
+- **Image 2 (OUTFIT):** The CHARACTER must be wearing this outfit.
+- **Image 3 (BACKGROUND):** The CHARACTER must be placed in this scene.
 
-**FUNDAMENTAL RULE: IDENTITY PRESERVATION**
-This is the most important rule. You will be given a **CHARACTER** image. The person in this image is the **SUBJECT**.
-- You **MUST** preserve the SUBJECT's identity with 100% fidelity.
-- Identity includes: **face, hair, and body shape (vóc dáng)**.
-- This is an **IDENTITY VECTOR LOCK**.
-- The following instruction is a critical, non-negotiable part of this rule: ** (Always keep this identity vector, regardless of changes to expression, context, or outfit).**
-- Any result that does not look exactly like the SUBJECT is a complete failure.
+**INSTRUCTION:**
+- The desired pose and action for the CHARACTER are: "${translatedPrompt}".
 
-**TASK:**
-Your job is to create a new, photorealistic image where the **CHARACTER** is wearing the **OUTFIT**, in a pose described by the user's prompt, and placed within the **BACKGROUND**. You must ensure perfect integration: matching lighting, casting shadows, correct perspective, and color grading.
-
-**USER PROMPT FOR POSE:** "${translatedPrompt}"
-
-Now, begin the composition using the following assets.`;
+Combine these elements into a single, seamless, photorealistic image. Ensure lighting, shadows, and perspective are consistent. The absolute highest priority is the perfect replication of the CHARACTER's identity.`;
 
         const parts = [
-            { text: systemInstruction },
-            { text: "**CHARACTER (IDENTITY SOURCE):**" },
             imageToPart(characterImage),
-            { text: "**OUTFIT:**" },
             imageToPart(selectedOutfitImage),
-            { text: "**BACKGROUND:**" },
             imageToPart(selectedBackgroundImage),
+            { text: userPrompt },
         ];
 
         const response = await ai.models.generateContent({

@@ -26,6 +26,8 @@ const WelcomeState: React.FC<{mode: AppMode}> = ({mode}) => {
       case 'generate': return 'Sẵn sàng tạo nên kiệt tác';
       case 'image-generate': return 'Tạo biến thể từ hình ảnh';
       case 'edit': return 'Sẵn sàng biến hoá nhân vật của bạn';
+      case 'product-shot': return 'Studio Chụp Ảnh Sản Phẩm AI';
+      case 'ai-travel': return 'Hộ chiếu đến Mọi nơi';
       // FIX: Removed 'swap' case as it is not a valid AppMode.
       case 'magic': return 'Bộ công cụ chỉnh sửa ảnh AI';
       case 'photo-restore': return 'Phục Chế Ảnh Cũ Nát by AI';
@@ -60,6 +62,31 @@ const WelcomeState: React.FC<{mode: AppMode}> = ({mode}) => {
                 <li>Tải lên <strong>Ảnh Nhân Vật Gốc</strong> và <strong>Ảnh Concept</strong>.</li>
                 <li>AI sẽ tự động tách trang phục, bối cảnh và phân tích tư thế.</li>
                 <li>Chọn và trộn các yếu tố bạn muốn, sau đó tinh chỉnh bằng mô tả để tạo ra kết quả hoàn hảo.</li>
+            </ol>
+          </>
+        );
+      case 'product-shot':
+        return (
+          <>
+            Biến ảnh sản phẩm đơn giản của bạn thành những shoot hình chuyên nghiệp.
+            <br />
+            Tải lên ảnh sản phẩm và mô tả bối cảnh, ánh sáng, và phong cách bạn mong muốn.
+            <br />
+            <span className="text-xs text-gray-400 mt-2 block bg-gray-900/50 p-2 rounded-md">
+              VD: "một lọ kem dưỡng da đặt trên một mặt gương, phản chiếu những đám mây hồng, phong cách tối giản, ánh sáng dịu".
+            </span>
+          </>
+        );
+      case 'ai-travel':
+        return (
+          <>
+            Du lịch thế giới mà không cần rời khỏi nhà. AI sẽ đưa bạn đến bất kỳ đâu!
+            <br />
+            <ol className="text-left list-decimal list-inside mt-2 text-xs text-gray-400 bg-gray-900/50 p-3 rounded-md space-y-1">
+                <li>Tải lên ảnh chân dung rõ mặt của bạn.</li>
+                <li>Chọn một bộ trang phục theo chủ đề.</li>
+                <li>Chọn một địa điểm du lịch nổi tiếng.</li>
+                <li>Tinh chỉnh thêm và tạo ra bức ảnh du lịch trong mơ của bạn!</li>
             </ol>
           </>
         );
@@ -396,7 +423,7 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ isLoading, resul
   // Responsive grid: 1 column on small screens, 2 on medium screens and up.
   const gridCols = results.length > 1 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1';
   const itemSpan = results.length === 1 ? 'max-w-md mx-auto' : '';
-  const showImageActions = mode === 'generate' || mode === 'edit' || mode === 'image-generate' || mode === 'magic' || mode === 'photo-restore';
+  const showImageActions = mode === 'generate' || mode === 'edit' || mode === 'image-generate' || mode === 'magic' || mode === 'photo-restore' || mode === 'product-shot' || mode === 'ai-travel';
   
   const aspectRatioClass = getAspectRatioClass(aspectRatio);
 
