@@ -338,6 +338,9 @@ export const generateVideo = async (apiKey: string, options: VideoOptions): Prom
     prompt: translatedPrompt,
     config: {
       numberOfVideos: 1,
+      aspectRatio: options.aspectRatio,
+      resolution: '720p', // Default to 720p for now
+      personGeneration: 'allow_adult', // Added based on user-provided documentation to improve results with people.
     }
   };
 

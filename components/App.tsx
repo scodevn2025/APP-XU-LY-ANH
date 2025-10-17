@@ -38,7 +38,7 @@ const App: React.FC = () => {
   const [promptHistory, setPromptHistory] = useState<string[]>([]);
   const [view, setView] = useState<MainView>('studio');
   const [zoomedImageUrl, setZoomedImageUrl] = useState<string | null>(null);
-  const [lastUsedAspectRatio, setLastUsedAspectRatio] = useState<AspectRatio>('9:16');
+  const [lastUsedAspectRatio, setLastUsedAspectRatio] = useState<AspectRatio>('3:4');
   const [isVeoKeySelected, setIsVeoKeySelected] = useState(false);
 
 

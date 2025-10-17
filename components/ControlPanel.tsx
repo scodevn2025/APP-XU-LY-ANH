@@ -364,7 +364,7 @@ const VideoForm: React.FC<Omit<ControlPanelProps, 'mode' | 'onZoomImage'>> = ({ 
 
 const GenerateForm: React.FC<Omit<ControlPanelProps, 'mode' | 'onZoomImage'>> = ({ onSubmit, isLoading, cooldown, quality, onQualityChange, apiKey, promptHistory, onClearPromptHistory }) => {
   const [prompt, setPrompt] = useState('');
-  const [aspectRatio, setAspectRatio] = useState<AspectRatio>('9:16');
+  const [aspectRatio, setAspectRatio] = useState<AspectRatio>('3:4');
   const [numberOfImages, setNumberOfImages] = useState(4);
   const [referenceImages, setReferenceImages] = useState<LocalImageData[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -491,7 +491,7 @@ const GenerateForm: React.FC<Omit<ControlPanelProps, 'mode' | 'onZoomImage'>> = 
 
 const ProductShotForm: React.FC<Omit<ControlPanelProps, 'mode' | 'onZoomImage'>> = ({ onSubmit, isLoading, cooldown, quality, onQualityChange, apiKey, promptHistory, onClearPromptHistory }) => {
   const [prompt, setPrompt] = useState('');
-  const [aspectRatio, setAspectRatio] = useState<AspectRatio>('4:3');
+  const [aspectRatio, setAspectRatio] = useState<AspectRatio>('3:4');
   const [numberOfImages, setNumberOfImages] = useState(4);
   const [image, setImage] = useState<LocalImageData | null>(null);
 
@@ -603,7 +603,7 @@ const ImageGenerateForm: React.FC<Omit<ControlPanelProps, 'mode'>> = ({ onSubmit
   const [image, setImage] = useState<LocalImageData | null>(null); // Character
   const [conceptImage, setConceptImage] = useState<LocalImageData | null>(null); // Concept
   const [numberOfImages, setNumberOfImages] = useState(2);
-  const [aspectRatio, setAspectRatio] = useState<AspectRatio>('9:16');
+  const [aspectRatio, setAspectRatio] = useState<AspectRatio>('3:4');
   
   const [isExtracting, setIsExtracting] = useState(false);
   const [isAnalyzingPose, setIsAnalyzingPose] = useState(false);
@@ -1024,7 +1024,7 @@ const EditForm: React.FC<Omit<ControlPanelProps, 'mode' | 'onZoomImage'>> = ({ o
     const [productImage, setProductImage] = useState<LocalImageData | null>(null);
     const [backgroundImage, setBackgroundImage] = useState<LocalImageData | null>(null);
     const [numberOfVariations, setNumberOfVariations] = useState(2);
-    const [aspectRatio, setAspectRatio] = useState<AspectRatio>('9:16');
+    const [aspectRatio, setAspectRatio] = useState<AspectRatio>('3:4');
     
     const allImages = useMemo(() => {
         const images = [...characterImages];
@@ -1128,7 +1128,7 @@ const MagicForm: React.FC<Omit<ControlPanelProps, 'mode' | 'onZoomImage'>> = ({ 
     const [prompt, setPrompt] = useState('');
     const [mask, setMask] = useState<LocalImageData | null>(null);
     const [numberOfImages, setNumberOfImages] = useState(2);
-    const [aspectRatio, setAspectRatio] = useState<AspectRatio>('9:16');
+    const [aspectRatio, setAspectRatio] = useState<AspectRatio>('3:4');
     const [filterStyle, setFilterStyle] = useState<AutoFilterStyle>('cinematic-teal-orange');
 
     useEffect(() => {
@@ -1547,7 +1547,7 @@ const AITravelForm: React.FC<Omit<ControlPanelProps, 'mode' | 'onZoomImage'>> = 
     const [customLocationPrompt, setCustomLocationPrompt] = useState('');
     const [customPrompt, setCustomPrompt] = useState('');
     const [numberOfImages, setNumberOfImages] = useState(2);
-    const [aspectRatio, setAspectRatio] = useState<AspectRatio>('9:16');
+    const [aspectRatio, setAspectRatio] = useState<AspectRatio>('3:4');
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
