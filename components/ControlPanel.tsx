@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 // Fix: Renamed ImageData to LocalImageData
 import type { AppMode, GenerateOptions, EditOptions, SwapOptions, MagicOptions, AnalyzeOptions, AspectRatio, MagicAction, LocalImageData, OutputQuality, VideoOptions, ImageGenerateOptions, VideoAnalysisOptions, PhotoRestoreOptions, AutoFilterStyle, AITravelOptions } from '../types';
-import { ASPECT_RATIOS, MAGIC_ACTIONS, PROMPT_SUGGESTION_TAGS, EDIT_FORM_TAGS, OUTPUT_QUALITIES, MODES, AI_TRAVEL_CONCEPTS, AUTO_FILTER_STYLES, TRAVEL_LOCATIONS, TRAVEL_OUTFITS } from '../constants';
+import { ASPECT_RATIOS, MAGIC_ACTIONS, PROMPT_SUGGESTION_TAGS, EDIT_FORM_TAGS, OUTPUT_QUALITIES, MODES, AUTO_FILTER_STYLES, TRAVEL_OUTFITS, TRAVEL_LOCATIONS, AI_TRAVEL_CONCEPTS } from '../constants';
 import { ImageUploader, MultiImageUploader, VideoUploader } from './ImageUploader';
 import { SpinnerIcon } from './icons/SpinnerIcon';
 import { SparklesIcon } from './icons/SparklesIcon';
@@ -1541,27 +1541,37 @@ const PhotoRestoreForm: React.FC<Omit<ControlPanelProps, 'mode' | 'onZoomImage' 
 
 const AITravelForm: React.FC<Omit<ControlPanelProps, 'mode' | 'onZoomImage'>> = ({ onSubmit, isLoading, cooldown, quality, onQualityChange, apiKey, promptHistory, onClearPromptHistory }) => {
     const [characterImages, setCharacterImages] = useState<LocalImageData[]>([]);
-    const [selectedOutfitId, setSelectedOutfitId] = useState<string | null>(null);
-    const [customOutfitPrompt, setCustomOutfitPrompt] = useState('');
-    const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null);
-    const [customLocationPrompt, setCustomLocationPrompt] = useState('');
+    const [selectedOutfitPrompt, setSelectedOutfitPrompt] = useState('');
+    const [customOutfit, setCustomOutfit] = useState('');
+    const [showCustomOutfit, setShowCustomOutfit] = useState(false);
+    const [selectedLocationPrompt, setSelectedLocationPrompt] = useState('');
+    const [customLocation, setCustomLocation] = useState('');
+    const [showCustomLocation, setShowCustomLocation] = useState(false);
     const [customPrompt, setCustomPrompt] = useState('');
     const [numberOfImages, setNumberOfImages] = useState(2);
     const [aspectRatio, setAspectRatio] = useState<AspectRatio>('3:4');
+    
+    useEffect(() => {
+        if (!showCustomOutfit) setCustomOutfit('');
+    }, [showCustomOutfit]);
+
+    useEffect(() => {
+        if (!showCustomLocation) setCustomLocation('');
+    }, [showCustomLocation]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-
-        const outfitPrompt = selectedOutfitId === 'custom'
-            ? customOutfitPrompt
-            : TRAVEL_OUTFITS.find(o => o.id === selectedOutfitId)?.prompt || '';
-
-        const locationPrompt = selectedLocationId === 'custom'
-            ? customLocationPrompt
-            : TRAVEL_LOCATIONS.find(l => l.id === selectedLocationId)?.prompt || '';
         
         if (characterImages.length === 0) {
             alert("Vui lòng tải ảnh của bạn.");
+            return;
+        }
+
+        const outfitPrompt = showCustomOutfit ? customOutfit : selectedOutfitPrompt;
+        const locationPrompt = showCustomLocation ? customLocation : selectedLocationPrompt;
+
+        if (!outfitPrompt && !locationPrompt && !customPrompt) {
+            alert("Vui lòng chọn trang phục, địa điểm hoặc nhập mô tả chi tiết.");
             return;
         }
 
@@ -1575,14 +1585,14 @@ const AITravelForm: React.FC<Omit<ControlPanelProps, 'mode' | 'onZoomImage'>> = 
         };
         onSubmit(options);
     };
-    
+
     const handleTagClick = (tag: string) => {
       setCustomPrompt(p => p ? `${p}, ${tag}` : tag);
     };
 
     const isDisabled = !apiKey || isLoading || cooldown > 0 || characterImages.length === 0;
     const buttonTitle = !apiKey ? "Vui lòng nhập API Key." : characterImages.length === 0 ? "Vui lòng tải ảnh của bạn." : "";
-    
+
     return (
         <form onSubmit={handleSubmit} className="space-y-6">
             <div>
@@ -1591,108 +1601,94 @@ const AITravelForm: React.FC<Omit<ControlPanelProps, 'mode' | 'onZoomImage'>> = 
             </div>
 
             <div>
-                <h3 className="text-lg font-semibold text-white mb-2 border-b border-gray-700 pb-2">Bước 2: Chọn trang phục &amp; địa điểm (tùy chọn)</h3>
-                <div className="mb-4 mt-4">
-                    <p className="text-sm font-semibold text-gray-300 mb-2">Trang phục</p>
-                    <div className="flex flex-wrap gap-2">
-                        {TRAVEL_OUTFITS.map(outfit => (
-                            <button
-                                key={outfit.id}
-                                type="button"
-                                onClick={() => setSelectedOutfitId(outfit.id)}
-                                className={`px-3 py-1 bg-gray-700 text-xs text-gray-300 rounded-full hover:bg-gray-600 transition-colors ${
-                                    selectedOutfitId === outfit.id ? 'bg-indigo-600 text-white ring-2 ring-indigo-400' : ''
-                                }`}
-                            >
-                                {selectedOutfitId === outfit.id ? '✓' : '+'} {outfit.name}
-                            </button>
-                        ))}
+                <h3 className="text-lg font-semibold text-white mb-2 border-b border-gray-700 pb-2">Bước 2: Chọn trang phục & địa điểm (tùy chọn)</h3>
+                <div className="space-y-4 mt-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">Trang phục</label>
+                        <div className="flex flex-wrap gap-2">
+                           {TRAVEL_OUTFITS.map(opt => (
+                               <button 
+                                    type="button"
+                                    key={opt.id}
+                                    onClick={() => { setSelectedOutfitPrompt(opt.prompt); setShowCustomOutfit(false); }}
+                                    className={`px-3 py-1.5 border rounded-md text-xs transition-colors ${!showCustomOutfit && selectedOutfitPrompt === opt.prompt ? 'bg-sky-600 border-sky-500 text-white' : 'bg-gray-700 border-gray-600 hover:bg-gray-600'}`}
+                               >
+                                    {opt.name}
+                               </button>
+                           ))}
+                        </div>
                          <button
-                            key="custom"
                             type="button"
-                            onClick={() => setSelectedOutfitId('custom')}
-                            className={`px-3 py-1 text-xs rounded-full transition-colors ${
-                                selectedOutfitId === 'custom' 
-                                ? 'bg-red-600 text-white ring-2 ring-red-400' 
-                                : 'bg-amber-800/60 text-amber-200 hover:bg-amber-700/60'
-                            }`}
+                            onClick={() => { setShowCustomOutfit(true); setSelectedOutfitPrompt(''); }}
+                            className={`w-full mt-2 px-2 py-2 border rounded-md text-xs transition-colors ${showCustomOutfit ? 'bg-amber-600 border-amber-500 text-white' : 'bg-gray-700 border-gray-600 hover:bg-gray-600'}`}
                         >
-                            {selectedOutfitId === 'custom' ? '✓' : '+'} Khác...
+                            Tùy chỉnh trang phục...
                         </button>
+                        {showCustomOutfit && (
+                             <input
+                                type="text"
+                                value={customOutfit}
+                                onChange={e => setCustomOutfit(e.target.value)}
+                                className="mt-2 w-full bg-gray-900 border border-gray-600 rounded-md shadow-sm focus:ring-sky-500 focus:border-sky-500 sm:text-sm text-white p-2"
+                                placeholder="VD: a stylish black leather jacket and jeans"
+                            />
+                        )}
                     </div>
-                    {selectedOutfitId === 'custom' && (
-                        <textarea
-                            value={customOutfitPrompt}
-                            onChange={(e) => setCustomOutfitPrompt(e.target.value)}
-                            rows={2}
-                            className="mt-3 w-full bg-gray-900 border border-gray-600 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-white p-2"
-                            placeholder="Nhập mô tả trang phục của bạn, VD: mặc một bộ váy dạ hội lấp lánh màu đen"
-                        />
-                    )}
-                </div>
-                <div>
-                    <p className="text-sm font-semibold text-gray-300 mb-2">Địa điểm</p>
-                     <div className="flex flex-wrap gap-2">
-                        {TRAVEL_LOCATIONS.map(location => (
-                            <button
-                                key={location.id}
-                                type="button"
-                                onClick={() => setSelectedLocationId(location.id)}
-                                className={`px-3 py-1 bg-gray-700 text-xs text-gray-300 rounded-full hover:bg-gray-600 transition-colors ${
-                                    selectedLocationId === location.id ? 'bg-indigo-600 text-white ring-2 ring-indigo-400' : ''
-                                }`}
-                            >
-                                {selectedLocationId === location.id ? '✓' : '+'} {location.name}
-                            </button>
-                        ))}
-                         <button
-                            key="custom"
+                     <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">Địa điểm</label>
+                        <div className="flex flex-wrap gap-2">
+                             {TRAVEL_LOCATIONS.map(opt => (
+                               <button 
+                                    type="button"
+                                    key={opt.id}
+                                    onClick={() => { setSelectedLocationPrompt(opt.prompt); setShowCustomLocation(false); }}
+                                    className={`px-3 py-1.5 border rounded-md text-xs transition-colors ${!showCustomLocation && selectedLocationPrompt === opt.prompt ? 'bg-sky-600 border-sky-500 text-white' : 'bg-gray-700 border-gray-600 hover:bg-gray-600'}`}
+                                >
+                                    {opt.name}
+                                </button>
+                           ))}
+                        </div>
+                        <button
                             type="button"
-                            onClick={() => setSelectedLocationId('custom')}
-                            className={`px-3 py-1 text-xs rounded-full transition-colors ${
-                                selectedLocationId === 'custom' 
-                                ? 'bg-red-600 text-white ring-2 ring-red-400' 
-                                : 'bg-amber-800/60 text-amber-200 hover:bg-amber-700/60'
-                            }`}
+                            onClick={() => { setShowCustomLocation(true); setSelectedLocationPrompt(''); }}
+                             className={`w-full mt-2 px-2 py-2 border rounded-md text-xs transition-colors ${showCustomLocation ? 'bg-amber-600 border-amber-500 text-white' : 'bg-gray-700 border-gray-600 hover:bg-gray-600'}`}
                         >
-                            {selectedLocationId === 'custom' ? '✓' : '+'} Khác...
+                            Tùy chỉnh địa điểm...
                         </button>
+                        {showCustomLocation && (
+                             <input
+                                type="text"
+                                value={customLocation}
+                                onChange={e => setCustomLocation(e.target.value)}
+                                className="mt-2 w-full bg-gray-900 border border-gray-600 rounded-md shadow-sm focus:ring-sky-500 focus:border-sky-500 sm:text-sm text-white p-2"
+                                placeholder="VD: on a neon-lit street in Tokyo at night"
+                            />
+                        )}
                     </div>
-                     {selectedLocationId === 'custom' && (
-                        <textarea
-                            value={customLocationPrompt}
-                            onChange={(e) => setCustomLocationPrompt(e.target.value)}
-                            rows={2}
-                            className="mt-3 w-full bg-gray-900 border border-gray-600 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-white p-2"
-                            placeholder="Nhập mô tả địa điểm của bạn, VD: đứng trên một con đường lát sỏi ở một ngôi làng Ý cổ kính"
-                        />
-                    )}
                 </div>
             </div>
-
 
              <div>
                 <h3 className="text-lg font-semibold text-white mb-2 border-b border-gray-700 pb-2">Bước 3: Tinh chỉnh (tùy chọn)</h3>
                 <div className="space-y-4 mt-4">
-                    <div>
-                      <p className="text-sm font-semibold text-gray-300 mb-2">Gợi ý Concept Chụp ảnh</p>
-                      <div className="flex flex-wrap gap-2">
-                        {AI_TRAVEL_CONCEPTS.map(concept => (
-                          <button
-                            key={concept.id}
-                            type="button"
-                            onClick={() => setCustomPrompt(concept.prompt)}
-                            className={`px-3 py-1 bg-gray-700 text-xs text-gray-300 rounded-full hover:bg-gray-600 transition-colors ${
-                              customPrompt === concept.prompt ? 'bg-indigo-600 text-white ring-2 ring-indigo-400' : ''
-                            }`}
-                          >
-                            + {concept.name}
-                          </button>
-                        ))}
-                      </div>
+                     <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">Gợi ý Concept Chụp ảnh</label>
+                        <div className="flex flex-wrap gap-2">
+                            {AI_TRAVEL_CONCEPTS.map(concept => (
+                                <button
+                                    type="button"
+                                    key={concept.id}
+                                    onClick={() => handleTagClick(concept.prompt)}
+                                    className="px-2 py-1 border rounded-md text-xs transition-colors bg-gray-700 border-gray-600 hover:bg-gray-600"
+                                    title={concept.prompt}
+                                >
+                                    + {concept.name}
+                                </button>
+                            ))}
+                        </div>
                     </div>
-                    <div>
-                        <div className="flex justify-between items-center mb-2">
+                     <div>
+                        <div className="flex justify-between items-center">
                             <label htmlFor="prompt-travel" className="block text-sm font-medium text-gray-300">Thêm chi tiết</label>
                             <PromptHistoryDropdown history={promptHistory} onSelect={setCustomPrompt} onClear={onClearPromptHistory} />
                         </div>
@@ -1701,17 +1697,16 @@ const AITravelForm: React.FC<Omit<ControlPanelProps, 'mode' | 'onZoomImage'>> = 
                             value={customPrompt}
                             onChange={(e) => setCustomPrompt(e.target.value)}
                             rows={3}
-                            className="w-full bg-gray-900 border border-gray-600 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-white p-2"
-                            placeholder="VD: mỉm cười rạng rỡ, nhìn vào máy ảnh, ánh sáng hoàng hôn"
+                            className="mt-1 w-full bg-gray-900 border border-gray-600 rounded-md shadow-sm focus:ring-sky-500 focus:border-sky-500 sm:text-sm text-white p-2"
+                            placeholder="Thêm các chi tiết như ánh sáng, góc chụp, phong cách..."
                         />
                         <PromptAssistant onTagClick={handleTagClick} tags={PROMPT_SUGGESTION_TAGS} />
                     </div>
-
                     <div>
                         <label className="block text-sm font-medium text-gray-300 mb-2">Tỷ lệ khung hình</label>
                         <div className="flex flex-wrap gap-2">
                             {ASPECT_RATIOS.map((ratio) => (
-                                <button type="button" key={ratio} onClick={() => setAspectRatio(ratio)} className={`flex-1 p-2 border rounded-md text-xs transition-colors ${aspectRatio === ratio ? 'bg-indigo-600 border-indigo-500' : 'bg-gray-700 border-gray-600 hover:bg-gray-600'}`}>
+                                <button type="button" key={ratio} onClick={() => setAspectRatio(ratio)} className={`flex-1 p-2 border rounded-md text-xs transition-colors ${aspectRatio === ratio ? 'bg-sky-600 border-sky-500' : 'bg-gray-700 border-gray-600 hover:bg-gray-600'}`}>
                                     {ratio}
                                 </button>
                             ))}
@@ -1727,7 +1722,7 @@ const AITravelForm: React.FC<Omit<ControlPanelProps, 'mode' | 'onZoomImage'>> = 
                 </div>
             </div>
 
-            <button type="submit" disabled={isDisabled} title={buttonTitle} className="w-full flex items-center justify-center px-4 py-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 focus:ring-offset-gray-900 disabled:bg-indigo-400 disabled:cursor-not-allowed mt-4 transition-transform duration-200 hover:scale-105 active:scale-95">
+            <button type="submit" disabled={isDisabled} title={buttonTitle} className="w-full flex items-center justify-center px-4 py-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-sky-600 hover:bg-sky-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 focus:ring-offset-gray-900 disabled:bg-sky-400 disabled:cursor-not-allowed mt-4 transition-transform duration-200 hover:scale-105 active:scale-95">
                 {isLoading && <SpinnerIcon />}
                 {isLoading ? 'Đang tạo ảnh...' : cooldown > 0 ? `Vui lòng đợi (${cooldown}s)` : 'Bắt đầu chuyến du lịch!'}
             </button>
@@ -1739,10 +1734,13 @@ const AITravelForm: React.FC<Omit<ControlPanelProps, 'mode' | 'onZoomImage'>> = 
 export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
     const { mode } = props;
     
+    // FIX: Simplified the FormComponent lookup to avoid potential type issues.
+    // The `name` property is not needed for the lookup logic.
+    const currentModeInfo = MODES.find(m => m.id === mode);
+    
     const FormComponent = useMemo(() => {
-        const currentMode = MODES.find(m => m.id === mode);
-        if (currentMode?.formComponent) {
-            return currentMode.formComponent;
+        if (currentModeInfo?.formComponent) {
+            return currentModeInfo.formComponent;
         }
         
         switch (mode) {
@@ -1758,7 +1756,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
             case 'video-analysis': return VideoAnalysisForm;
             default: return () => null;
         }
-    }, [mode]);
+    }, [mode, currentModeInfo]);
 
     return (
         <div className="p-4 sm:p-6">

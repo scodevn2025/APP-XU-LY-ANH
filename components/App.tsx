@@ -197,8 +197,9 @@ const App: React.FC = () => {
           startCooldown(10);
           break;
         case 'ai-travel':
-          response = await geminiService.generateAITravelImage(apiKey, options as AITravelOptions);
-          promptToSave = `${options.customPrompt} (Trang phục: ${options.outfitPrompt}, Địa điểm: ${options.locationPrompt})`;
+          const travelOpts = options as AITravelOptions;
+          response = await geminiService.generateAITravelImage(apiKey, travelOpts);
+          promptToSave = [travelOpts.outfitPrompt, travelOpts.locationPrompt, travelOpts.customPrompt].filter(Boolean).join(' - ');
           startCooldown(15);
           break;
         case 'image-generate':

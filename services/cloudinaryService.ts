@@ -1,14 +1,5 @@
-
-// Note for the user: To use this service, you must configure an "unsigned" upload preset in your Cloudinary account.
-// 1. Log in to your Cloudinary account (cloud name: dppkpulgn).
-// 2. Go to Settings (cog icon) -> Upload.
-// 3. Scroll down to "Upload presets", click "Add upload preset".
-// 4. Set the "Signing Mode" to "Unsigned".
-// 5. Note the "Upload preset name" and ensure it matches the one used below ('ai_character_studio').
-
-const CLOUDINARY_CLOUD_NAME = 'djsbie5y1';
-const CLOUDINARY_UPLOAD_PRESET = 'ai_character_studio';
-const CLOUDINARY_UPLOAD_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
+const CLOUD_NAME = 'djsbie5y1';
+const UPLOAD_PRESET = 'ai_character_studio';
 
 /**
  * Uploads a base64 encoded image to Cloudinary.
@@ -16,31 +7,28 @@ const CLOUDINARY_UPLOAD_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOU
  * @returns The secure URL of the uploaded image.
  */
 export const uploadImage = async (base64Data: string): Promise<string> => {
-    const formData = new FormData();
-    // Cloudinary expects the file data to be a data URI.
-    formData.append('file', `data:image/jpeg;base64,${base64Data}`);
-    formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+  const url = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`;
+  
+  const formData = new FormData();
+  // Cloudinary's upload API expects the file in the data URI format for base64 uploads.
+  formData.append('file', `data:image/jpeg;base64,${base64Data}`);
+  formData.append('upload_preset', UPLOAD_PRESET);
 
-    try {
-        const response = await fetch(CLOUDINARY_UPLOAD_URL, {
-            method: 'POST',
-            body: formData,
-        });
+  const response = await fetch(url, {
+    method: 'POST',
+    body: formData,
+  });
 
-        if (!response.ok) {
-            const errorData = await response.json();
-            console.error('Cloudinary upload error:', errorData);
-            throw new Error(errorData.error?.message || 'Failed to upload image to Cloudinary. Check your cloud name and upload preset.');
-        }
-
-        const data = await response.json();
-        return data.secure_url;
-
-    } catch (error) {
-        console.error('Network error during Cloudinary upload:', error);
-        if (error instanceof Error) {
-            throw new Error(`[Cloudinary Upload] ${error.message}`);
-        }
-        throw new Error('An unknown error occurred while uploading the image.');
+  if (!response.ok) {
+    const errorData = await response.json();
+    console.error('Cloudinary upload error:', errorData);
+    // Provide a more specific error message if the preset is not found.
+    if (errorData.error && errorData.error.message.includes('not found')) {
+        throw new Error('Cloudinary upload preset not found. Please configure it in your Cloudinary settings.');
     }
+    throw new Error(errorData.error.message || 'Cloudinary upload failed due to an unknown error.');
+  }
+
+  const data = await response.json();
+  return data.secure_url;
 };
